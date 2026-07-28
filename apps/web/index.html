@@ -4,6 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>StatusFlow - WhatsApp Status Scheduling Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              emerald: {
+                500: '#25D366',
+                600: '#128C7E',
+                700: '#075E54'
+              }
+            }
+          }
+        }
+      }
+    </script>
   </head>
   <body class="bg-zinc-950 text-zinc-50 antialiased selection:bg-emerald-500 selection:text-white">
     <div id="root"></div>
