@@ -1,7 +1,7 @@
 # Docker Multi-Stage Build for StatusFlow API Gateway
 FROM node:20-alpine AS base
 WORKDIR /app
-RUN npm install -g pnpm
+RUN npm install -g pnpm typescript
 
 COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/ ./packages/
