@@ -17,8 +17,13 @@ export const Login: React.FC<{ onNavigate: (page: string) => void }> = ({ onNavi
   };
 
   const handleGoogleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
-    if (error) setError(error.message + ' (Enable Google Provider in Supabase Auth -> Providers)');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin
+      }
+    });
+    if (error) setError(error.message);
   };
 
   return (
