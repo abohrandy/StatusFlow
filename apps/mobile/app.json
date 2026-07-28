@@ -4,8 +4,9 @@
     "slug": "statusflow",
     "version": "1.0.0",
     "orientation": "portrait",
+    "owner": "reelas",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -25,6 +26,11 @@
     "scheme": "statusflow",
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "37e961bf-cbed-4455-bcf1-51f5646cd9e8"
+      }
+    }
   }
 }
