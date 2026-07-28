@@ -1,0 +1,12 @@
+{
+  "name": "statusflow-monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --recursive --parallel dev",
+    "build": "pnpm --recursive build",
+    "lint": "pnpm --recursive lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}
