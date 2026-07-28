@@ -17,7 +17,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 function DashboardShell() {
-  const { user, signOut } = useAuth();
+  const { user, isAdmin, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'queue' | 'composer' | 'calendar' | 'notifications' | 'pairing' | 'media' | 'billing' | 'settings' | 'admin'>('dashboard');
 
   return (
@@ -105,20 +105,27 @@ function DashboardShell() {
             >
               Settings
             </button>
-            <button
-              onClick={() => setActiveTab('admin')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'admin' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
-              }`}
-            >
-              Admin Panel ⭐
-            </button>
+
+            {/* Super Admin Panel Only Visible to abohrandy@gmail.com */}
+            {isAdmin && (
+              <button
+                onClick={() => setActiveTab('admin')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === 'admin' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-emerald-400/80 hover:bg-emerald-500/10 hover:text-emerald-400'
+                }`}
+              >
+                Admin Panel ⭐ <span className="ml-auto px-1.5 py-0.5 rounded bg-emerald-500/20 text-[10px] font-bold">SUPER</span>
+              </button>
+            )}
           </nav>
         </div>
 
         <div className="space-y-4">
           <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
-            <div className="text-xs text-zinc-400 mb-1">Current Account</div>
+            <div className="text-xs text-zinc-400 mb-1 flex justify-between">
+              <span>Current Account</span>
+              {isAdmin && <span className="text-emerald-400 font-bold">Super Admin</span>}
+            </div>
             <div className="font-semibold text-emerald-400 text-xs truncate">{user?.email || 'User Account'}</div>
           </div>
           <button
@@ -161,7 +168,7 @@ function DashboardShell() {
           {activeTab === 'media' && <MediaLibrary />}
           {activeTab === 'billing' && <SubscriptionBilling />}
           {activeTab === 'settings' && <UserSettings />}
-          {activeTab === 'admin' && <AdminPanel />}
+          {activeTab === 'admin' && isAdmin && <AdminPanel />}
         </div>
       </main>
     </div>
@@ -176,7 +183,7 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <MainRouter page={page} setPage={setPage} onboarded={onboarded} setOnboarded={setOnboarded} />
-      </AuthProvider>
+      </ErrorBoundary>
     </ErrorBoundary>
   );
 }
