@@ -2,6 +2,7 @@
   "name": "statusflow-monorepo",
   "private": true,
   "scripts": {
+    "start": "node apps/api/src/index.js",
     "dev": "pnpm --recursive --parallel dev",
     "build": "pnpm --recursive build",
     "lint": "pnpm --recursive lint"
