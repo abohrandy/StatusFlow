@@ -1,13 +1,14 @@
-# Docker Multi-Stage Build for StatusFlow API Gateway
+# Docker Multi-Stage Build for StatusFlow API + Web Dashboard
 FROM node:20-alpine AS base
 WORKDIR /app
 RUN npm install -g pnpm typescript
 
 COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/ ./packages/
-COPY apps/api/ ./apps/api/
+COPY apps/ ./apps/
 
 RUN pnpm install --no-frozen-lockfile
+RUN pnpm --filter @statusflow/web build
 RUN pnpm --filter @statusflow/api build
 
 EXPOSE 5000
