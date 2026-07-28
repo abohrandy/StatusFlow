@@ -9,14 +9,9 @@ export interface BillingTransaction {
   status: 'SUCCESSFUL' | 'FAILED' | 'PENDING';
 }
 
-const INITIAL_TRANSACTIONS: BillingTransaction[] = [
-  { id: 'tx_1', reference: 'pstk_ref_9821a', amountNgn: 6000, planName: 'Monthly Plan', date: '2026-07-28', status: 'SUCCESSFUL' },
-  { id: 'tx_2', reference: 'pstk_ref_4102b', amountNgn: 2000, planName: 'Weekly Plan', date: '2026-07-21', status: 'SUCCESSFUL' }
-];
-
 export const SubscriptionBilling: React.FC = () => {
-  const [currentPlan, setCurrentPlan] = useState<'FREE' | 'WEEKLY' | 'MONTHLY'>('MONTHLY');
-  const [transactions, setTransactions] = useState<BillingTransaction[]>(INITIAL_TRANSACTIONS);
+  const [currentPlan, setCurrentPlan] = useState<'FREE' | 'WEEKLY' | 'MONTHLY'>('FREE');
+  const [transactions, setTransactions] = useState<BillingTransaction[]>([]);
   const [loadingPaystack, setLoadingPaystack] = useState<string | null>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -88,7 +83,6 @@ export const SubscriptionBilling: React.FC = () => {
             <ul className="space-y-2 text-xs text-zinc-300">
               <li className="flex items-center gap-2"><span>✓</span> 1 scheduled status every 7 days</li>
               <li className="flex items-center gap-2"><span>✓</span> 1 connected WhatsApp account</li>
-              <li className="flex items-center gap-2 text-zinc-500"><span>✕</span> Priority support</li>
             </ul>
           </div>
           <button
@@ -115,7 +109,7 @@ export const SubscriptionBilling: React.FC = () => {
             <p className="text-xs text-zinc-400">Perfect for short marketing campaigns and events.</p>
             <ul className="space-y-2 text-xs text-zinc-300">
               <li className="flex items-center gap-2"><span>✓</span> <strong>Unlimited</strong> status scheduling</li>
-              <li className="flex items-center gap-2"><span>✓</span> Multiple WhatsApp accounts</li>
+              <li className="flex items-center gap-2"><span>✓</span> 1 connected WhatsApp account</li>
               <li className="flex items-center gap-2"><span>✓</span> Automated Paystack weekly renewal</li>
             </ul>
           </div>
@@ -144,7 +138,7 @@ export const SubscriptionBilling: React.FC = () => {
             <p className="text-xs text-zinc-400">Full business automation with priority queue workers.</p>
             <ul className="space-y-2 text-xs text-zinc-300">
               <li className="flex items-center gap-2"><span>✓</span> <strong>Unlimited</strong> status scheduling</li>
-              <li className="flex items-center gap-2"><span>✓</span> Unlimited WhatsApp accounts</li>
+              <li className="flex items-center gap-2"><span>✓</span> 1 connected WhatsApp account</li>
               <li className="flex items-center gap-2"><span>✓</span> Priority queue processing</li>
             </ul>
           </div>
@@ -164,23 +158,29 @@ export const SubscriptionBilling: React.FC = () => {
       <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
         <h3 className="font-semibold text-base text-white mb-2">Paystack Payment History</h3>
 
-        <div className="space-y-3">
-          {transactions.map(tx => (
-            <div key={tx.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex items-center justify-between gap-4">
-              <div>
-                <div className="font-semibold text-sm text-white">{tx.planName}</div>
-                <div className="text-xs text-zinc-400 mt-1">Ref: <span className="font-mono text-zinc-300">{tx.reference}</span> • Date: {tx.date}</div>
-              </div>
+        {transactions.length === 0 ? (
+          <div className="py-8 text-center text-xs text-zinc-500 border border-dashed border-zinc-800 rounded-xl">
+            No payment history recorded yet.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {transactions.map(tx => (
+              <div key={tx.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex items-center justify-between gap-4">
+                <div>
+                  <div className="font-semibold text-sm text-white">{tx.planName}</div>
+                  <div className="text-xs text-zinc-400 mt-1">Ref: <span className="font-mono text-zinc-300">{tx.reference}</span> • Date: {tx.date}</div>
+                </div>
 
-              <div className="flex items-center gap-4">
-                <span className="font-bold text-white text-sm">₦{tx.amountNgn.toLocaleString()}</span>
-                <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-mono border border-emerald-500/20">
-                  {tx.status}
-                </span>
+                <div className="flex items-center gap-4">
+                  <span className="font-bold text-white text-sm">₦{tx.amountNgn.toLocaleString()}</span>
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-mono border border-emerald-500/20">
+                    {tx.status}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Cancellation Confirmation Modal */}

@@ -25,8 +25,8 @@ export const WhatsAppPairing: React.FC = () => {
     <div className="max-w-2xl mx-auto space-y-8">
       {/* Header */}
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold text-white tracking-tight">WhatsApp Account Integration</h2>
-        <p className="text-sm text-zinc-400">Connect your WhatsApp account using Baileys multi-device pairing protocol.</p>
+        <h2 className="text-2xl font-bold text-white tracking-tight">WhatsApp Integration</h2>
+        <p className="text-sm text-zinc-400">Connect your single WhatsApp account using Baileys pairing protocol.</p>
       </div>
 
       {/* Main Status Container */}
@@ -37,7 +37,7 @@ export const WhatsAppPairing: React.FC = () => {
             <span className={`w-3 h-3 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
             <div>
               <div className="text-xs text-zinc-400 font-medium">Socket Connection State</div>
-              <div className="text-sm font-semibold text-white">{isConnected ? 'CONNECTED (+234 812 345 6789)' : 'WAITING FOR PAIRING'}</div>
+              <div className="text-sm font-semibold text-white">{isConnected ? 'CONNECTED' : 'WAITING FOR PAIRING'}</div>
             </div>
           </div>
           {isConnected && (
@@ -139,9 +139,8 @@ export const WhatsAppPairing: React.FC = () => {
         <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2">
           <div className="text-xs font-semibold text-zinc-400">Live Socket Event Logs</div>
           <div className="font-mono text-[11px] text-zinc-500 space-y-1">
-            <div>[09:58:12] INFO: Baileys WebSocket instance started.</div>
-            <div>[09:58:14] INFO: Multi-device auth keys loaded from encrypted store.</div>
-            {isConnected && <div className="text-emerald-400">[09:58:20] SUCCESS: Socket connected (state: CONNECTED)</div>}
+            <div>INFO: Baileys WebSocket instance ready.</div>
+            {isConnected && <div className="text-emerald-400">SUCCESS: Socket connected (state: CONNECTED)</div>}
           </div>
         </div>
       </div>
