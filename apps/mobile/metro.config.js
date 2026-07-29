@@ -15,4 +15,7 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
+// 3. Disable symlink resolution for pnpm hoisted compatibility
+config.resolver.disableHierarchicalLookup = false;
+
 module.exports = config;
