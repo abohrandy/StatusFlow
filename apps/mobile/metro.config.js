@@ -15,7 +15,15 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
-// 3. Disable symlink resolution for pnpm hoisted compatibility
-config.resolver.disableHierarchicalLookup = false;
+// 3. Enable extra node modules resolution mapping for pnpm virtual store
+config.resolver.extraNodeModules = new Proxy({}, {
+  get: (target, name) => {
+    try {
+      return path.dirname(require.resolve(`${name}/package.json`, { paths: [projectRoot, workspaceRoot] }));
+    } catch (e) {
+      return path.join(projectRoot, 'node_modules', name);
+    }
+  }
+});
 
 module.exports = config;
