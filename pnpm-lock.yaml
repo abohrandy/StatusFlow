@@ -36,6 +36,9 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@react-native/assets-registry':
+        specifier: ^0.74.87
+        version: 0.74.87
       '@statusflow/types':
         specifier: workspace:*
         version: link:../../packages/types

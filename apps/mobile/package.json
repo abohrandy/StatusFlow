@@ -10,6 +10,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@react-native/assets-registry": "^0.74.87",
     "@statusflow/types": "workspace:*",
     "@statusflow/utils": "workspace:*",
     "@statusflow/validation": "workspace:*",
