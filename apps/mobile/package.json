@@ -10,12 +10,14 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@babel/core": "^7.29.7",
     "@react-native/assets-registry": "^0.74.87",
     "@statusflow/types": "workspace:*",
     "@statusflow/utils": "workspace:*",
     "@statusflow/validation": "workspace:*",
     "@tanstack/react-query": "^5.28.0",
     "axios": "^1.6.8",
+    "babel-preset-expo": "~11.0.15",
     "expo": "~51.0.0",
     "expo-asset": "^10.0.10",
     "expo-constants": "~16.0.2",
