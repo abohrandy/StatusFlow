@@ -183,8 +183,9 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <MainRouter page={page} setPage={setPage} onboarded={onboarded} setOnboarded={setOnboarded} />
-      </ErrorBoundary>
+      </AuthProvider>
     </ErrorBoundary>
+
   );
 }
 
