@@ -1,125 +1,128 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Card, EmptyState, PricingCard, TopAppBar } from '../components';
+import { Colors, Spacing, Typography } from '../theme';
 
-export default function MobileSubscriptionBilling() {
-  const [currentPlan, setCurrentPlan] = useState<'FREE' | 'WEEKLY' | 'MONTHLY'>('FREE');
-  const [loadingPaystack, setLoadingPaystack] = useState<string | null>(null);
+type PlanTier = 'free' | 'weekly' | 'monthly';
 
-  const handlePaystackCheckout = (plan: 'WEEKLY' | 'MONTHLY', amount: number) => {
-    setLoadingPaystack(plan);
+export default function BillingScreen() {
+  const router = useRouter();
+  const [currentPlan, setCurrentPlan] = useState<PlanTier>('free');
+  const [loadingPlan, setLoadingPlan] = useState<PlanTier | null>(null);
+
+  const handleCheckout = (plan: PlanTier, amount: number) => {
+    setLoadingPlan(plan);
     setTimeout(() => {
-      setLoadingPaystack(null);
+      setLoadingPlan(null);
       setCurrentPlan(plan);
-      Alert.alert('Paystack Success', `Payment of ₦${amount.toLocaleString()} successful! Subscribed to ${plan} Plan.`);
+      Alert.alert('Payment successful', `₦${amount.toLocaleString()} charged via Paystack. You're now on the ${plan} plan.`);
     }, 1200);
   };
 
   const handleCancelSubscription = () => {
     Alert.alert('Cancel Subscription', 'Are you sure you want to cancel your paid subscription?', [
       { text: 'Keep Subscription', style: 'cancel' },
-      { text: 'Confirm Cancel', style: 'destructive', onPress: () => setCurrentPlan('FREE') },
+      { text: 'Confirm Cancel', style: 'destructive', onPress: () => setCurrentPlan('free') },
     ]);
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <Text style={styles.title}>Subscription & Billing</Text>
-      <Text style={styles.subtitle}>Manage your plan tier and Paystack payments</Text>
+    <View style={styles.screen}>
+      <TopAppBar title="Billing & Subscription" leftMode="back" onLeftPress={() => router.back()} />
 
-      {/* Current Active Plan Card */}
-      <View style={styles.activeCard}>
-        <View style={styles.activeHeader}>
-          <Text style={styles.activeLabel}>Current Plan Tier</Text>
-          <Text style={styles.activeValue}>{currentPlan} TIER</Text>
-        </View>
-        <Text style={styles.activeDesc}>
-          {currentPlan === 'FREE' ? '1 scheduled status every 7 days • 1 connected WhatsApp account' : 'Unlimited status scheduling • 1 connected WhatsApp account'}
-        </Text>
-        {currentPlan !== 'FREE' && (
-          <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelSubscription}>
-            <Text style={styles.cancelBtnText}>Cancel Subscription</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Card style={styles.statusCard}>
+          <Text style={styles.statusLabel}>CURRENT PLAN</Text>
+          <Text style={styles.statusValue}>
+            {currentPlan === 'free' ? 'Free Starter' : currentPlan === 'weekly' ? 'Weekly Pro' : 'Monthly Business'}
+          </Text>
+          <Text style={styles.statusDescription}>
+            {currentPlan === 'free'
+              ? '1 scheduled status every 7 days • 1 connected WhatsApp account'
+              : 'Unlimited status scheduling • 1 connected WhatsApp account'}
+          </Text>
+          {currentPlan !== 'free' && (
+            <Text style={styles.cancelLink} onPress={handleCancelSubscription}>
+              Cancel Subscription
+            </Text>
+          )}
+        </Card>
 
-      {/* Plan Tier Cards */}
-      <View style={styles.plansContainer}>
-        {/* Free Starter */}
-        <View style={[styles.planCard, currentPlan === 'FREE' && styles.selectedPlanCard]}>
-          <Text style={styles.planTitle}>Free Starter</Text>
-          <Text style={styles.planPrice}>₦0 <Text style={styles.planPriceSub}>/ forever</Text></Text>
-          <Text style={styles.planFeature}>✓ 1 scheduled status every 7 days</Text>
-          <Text style={styles.planFeature}>✓ 1 connected WhatsApp account</Text>
-          <TouchableOpacity style={styles.planBtnDisabled} disabled>
-            <Text style={styles.planBtnDisabledText}>{currentPlan === 'FREE' ? 'Active Tier' : 'Free Tier'}</Text>
-          </TouchableOpacity>
+        <View style={styles.plans}>
+          <PricingCard
+            planName="Free Starter"
+            price="₦0"
+            cadence="forever"
+            description="Perfect for trying StatusFlow."
+            features={['1 scheduled status every 7 days', '1 connected WhatsApp account', 'Text, image, video']}
+            ctaLabel="Current Plan"
+            ctaDisabled={currentPlan === 'free'}
+            onPressCta={() => {}}
+            highlighted={currentPlan === 'free'}
+          />
+
+          <PricingCard
+            planName="Weekly Pro"
+            price="₦2,000"
+            cadence="week"
+            badge="MOST POPULAR"
+            description="Perfect for everyday business owners."
+            features={['Unlimited scheduled statuses', 'Schedule weeks ahead', 'Drafts & calendar', 'Priority publishing']}
+            ctaLabel={currentPlan === 'weekly' ? 'Current Plan' : loadingPlan === 'weekly' ? 'Processing...' : 'Upgrade with Paystack'}
+            ctaDisabled={currentPlan === 'weekly' || loadingPlan === 'weekly'}
+            onPressCta={() => handleCheckout('weekly', 2000)}
+            highlighted={currentPlan === 'weekly'}
+          />
+
+          <PricingCard
+            planName="Monthly Business"
+            price="₦6,000"
+            cadence="month"
+            badge="BEST VALUE"
+            description="Save money compared to paying weekly."
+            features={['Everything in Weekly Pro', 'Priority support', 'Early access to new features']}
+            ctaLabel={currentPlan === 'monthly' ? 'Current Plan' : loadingPlan === 'monthly' ? 'Processing...' : 'Upgrade with Paystack'}
+            ctaDisabled={currentPlan === 'monthly' || loadingPlan === 'monthly'}
+            onPressCta={() => handleCheckout('monthly', 6000)}
+            highlighted={currentPlan === 'monthly'}
+          />
         </View>
 
-        {/* Weekly Pro (₦2,000) */}
-        <View style={[styles.planCard, currentPlan === 'WEEKLY' && styles.selectedPlanCard]}>
-          <Text style={styles.planTitle}>Weekly Pro</Text>
-          <Text style={styles.planPrice}>₦2,000 <Text style={styles.planPriceSub}>/ week</Text></Text>
-          <Text style={styles.planFeature}>✓ Unlimited status scheduling</Text>
-          <Text style={styles.planFeature}>✓ 1 connected WhatsApp account</Text>
-          <Text style={styles.planFeature}>✓ Weekly Paystack auto-renewal</Text>
-          <TouchableOpacity
-            style={styles.paystackBtn}
-            onPress={() => handlePaystackCheckout('WEEKLY', 2000)}
-            disabled={currentPlan === 'WEEKLY' || loadingPaystack === 'WEEKLY'}
-          >
-            {loadingPaystack === 'WEEKLY' ? (
-              <ActivityIndicator color="#09090b" />
-            ) : (
-              <Text style={styles.paystackBtnText}>{currentPlan === 'WEEKLY' ? 'Active Tier' : 'Pay ₦2,000 with Paystack'}</Text>
-            )}
-          </TouchableOpacity>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Payment History</Text>
+          <EmptyState icon="receipt-long" title="No payments yet" subtitle="Your Paystack payment history will appear here." />
         </View>
-
-        {/* Monthly Business (₦6,000) */}
-        <View style={[styles.planCard, currentPlan === 'MONTHLY' && styles.selectedPlanCard]}>
-          <Text style={styles.planTitle}>Monthly Business</Text>
-          <Text style={styles.planPrice}>₦6,000 <Text style={styles.planPriceSub}>/ month</Text></Text>
-          <Text style={styles.planFeature}>✓ Unlimited status scheduling</Text>
-          <Text style={styles.planFeature}>✓ 1 connected WhatsApp account</Text>
-          <Text style={styles.planFeature}>✓ Priority queue processing</Text>
-          <TouchableOpacity
-            style={styles.paystackBtn}
-            onPress={() => handlePaystackCheckout('MONTHLY', 6000)}
-            disabled={currentPlan === 'MONTHLY' || loadingPaystack === 'MONTHLY'}
-          >
-            {loadingPaystack === 'MONTHLY' ? (
-              <ActivityIndicator color="#09090b" />
-            ) : (
-              <Text style={styles.paystackBtnText}>{currentPlan === 'MONTHLY' ? 'Active Tier' : 'Pay ₦6,000 with Paystack'}</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#09090b' },
-  contentContainer: { padding: 20, paddingBottom: 40 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' },
-  subtitle: { fontSize: 13, color: '#a1a1aa', textAlign: 'center', marginBottom: 20, marginTop: 4 },
-  activeCard: { backgroundColor: '#18181b', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#27272a', marginBottom: 20 },
-  activeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  activeLabel: { fontSize: 12, color: '#a1a1aa' },
-  activeValue: { fontSize: 13, fontWeight: 'bold', color: '#25D366' },
-  activeDesc: { fontSize: 12, color: '#ffffff', lineHeight: 18 },
-  cancelBtn: { marginTop: 14, backgroundColor: 'rgba(239, 68, 68, 0.1)', paddingVertical: 10, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.2)' },
-  cancelBtnText: { color: '#f87171', fontSize: 12, fontWeight: '600' },
-  plansContainer: { gap: 16 },
-  planCard: { backgroundColor: '#18181b', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#27272a' },
-  selectedPlanCard: { borderColor: '#25D366' },
-  planTitle: { fontSize: 16, fontWeight: 'bold', color: '#ffffff' },
-  planPrice: { fontSize: 22, fontWeight: 'bold', color: '#25D366', marginVertical: 8 },
-  planPriceSub: { fontSize: 12, color: '#71717a', fontWeight: 'normal' },
-  planFeature: { fontSize: 12, color: '#a1a1aa', marginVertical: 3 },
-  planBtnDisabled: { backgroundColor: '#27272a', borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 14 },
-  planBtnDisabledText: { color: '#71717a', fontWeight: 'bold', fontSize: 12 },
-  paystackBtn: { backgroundColor: '#25D366', borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 14 },
-  paystackBtnText: { color: '#09090b', fontWeight: 'bold', fontSize: 12 },
+  screen: { flex: 1, backgroundColor: Colors.background },
+  content: { padding: Spacing.marginMobile, paddingBottom: Spacing.xxl, gap: Spacing.lg },
+  statusCard: { gap: 4 },
+  statusLabel: {
+    ...Typography.labelSm,
+    color: Colors.outline,
+  },
+  statusValue: {
+    ...Typography.headlineMd,
+    color: Colors.onSurface,
+  },
+  statusDescription: {
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
+  },
+  cancelLink: {
+    ...Typography.labelMd,
+    color: Colors.error,
+    marginTop: Spacing.sm,
+  },
+  plans: { gap: Spacing.md },
+  section: { gap: Spacing.sm },
+  sectionTitle: {
+    ...Typography.headlineSm,
+    color: Colors.onSurface,
+  },
 });

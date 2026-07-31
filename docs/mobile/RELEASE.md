@@ -9,7 +9,7 @@ The Expo app config is configured with:
 - **Package Name**: `com.statusflow.app`
 - **Icon**: `assets/icon.png` (512x512 PNG)
 - **Adaptive Icon**: `assets/adaptive-icon.png`
-- **Splash Screen**: Background `#09090b` (Dark theme matching Stitch design system).
+- **Splash Screen**: Background `#f9f9ff` (light theme matching the MD3 Stitch design system — see `docs/mobile/README.md`).
 
 ---
 

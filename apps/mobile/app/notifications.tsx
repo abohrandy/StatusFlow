@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Card, EmptyState, TopAppBar } from '../components';
+import { Colors, Radius, Spacing, Typography } from '../theme';
 
 export interface MobileNotification {
   id: string;
@@ -9,7 +12,8 @@ export interface MobileNotification {
   isRead: boolean;
 }
 
-export default function MobileNotifications() {
+export default function NotificationsScreen() {
+  const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState<MobileNotification[]>([
     { id: 'n1', title: 'Status Broadcast Delivered', message: 'Image status delivered successfully to 142 contacts.', time: '10 mins ago', isRead: false },
@@ -23,49 +27,47 @@ export default function MobileNotifications() {
   }, []);
 
   const handleMarkAllRead = () => {
-    setNotifications(notifications.map((n) => ({ ...n, isRead: true })));
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
   };
 
   const handleToggleRead = (id: string) => {
-    setNotifications(notifications.map((n) => (n.id === id ? { ...n, isRead: !n.isRead } : n)));
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: !n.isRead } : n)));
   };
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Notification Center</Text>
-          <Text style={styles.subtitle}>{unreadCount} unread alert{unreadCount !== 1 ? 's' : ''}</Text>
-        </View>
+    <View style={styles.screen}>
+      <TopAppBar
+        title="Notifications"
+        leftMode="back"
+        onLeftPress={() => router.back()}
+        actions={
+          unreadCount > 0
+            ? [{ icon: 'done-all', accessibilityLabel: 'Mark all read', onPress: handleMarkAllRead }]
+            : []
+        }
+      />
 
-        {unreadCount > 0 && (
-          <TouchableOpacity style={styles.markReadBtn} onPress={handleMarkAllRead}>
-            <Text style={styles.markReadText}>Mark all read</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      <Text style={styles.subtitle}>{unreadCount} unread {unreadCount === 1 ? 'alert' : 'alerts'}</Text>
 
-      {/* Notifications FlatList */}
       <FlatList
         data={notifications}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#25D366" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
+        ListEmptyComponent={<EmptyState icon="notifications-none" title="No notifications yet" />}
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.card, !item.isRead && styles.unreadCard]}
-            onPress={() => handleToggleRead(item.id)}
-          >
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>{item.title}</Text>
-              {!item.isRead && <View style={styles.unreadDot} />}
-            </View>
-            <Text style={styles.messageText}>{item.message}</Text>
-            <Text style={styles.timeText}>{item.time}</Text>
-          </TouchableOpacity>
+          <Pressable onPress={() => handleToggleRead(item.id)}>
+            <Card style={!item.isRead ? styles.unreadItem : styles.item}>
+              <View style={styles.itemHeader}>
+                <Text style={styles.itemTitle}>{item.title}</Text>
+                {!item.isRead && <View style={styles.unreadDot} />}
+              </View>
+              <Text style={styles.itemMessage}>{item.message}</Text>
+              <Text style={styles.itemTime}>{item.time}</Text>
+            </Card>
+          </Pressable>
         )}
       />
     </View>
@@ -73,18 +75,41 @@ export default function MobileNotifications() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#09090b', padding: 20 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#ffffff' },
-  subtitle: { fontSize: 12, color: '#25D366', marginTop: 2, fontWeight: '500' },
-  markReadBtn: { backgroundColor: '#18181b', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#27272a' },
-  markReadText: { color: '#a1a1aa', fontSize: 11, fontWeight: '600' },
-  listContainer: { paddingBottom: 40, gap: 12 },
-  card: { backgroundColor: '#18181b', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#27272a' },
-  unreadCard: { borderColor: 'rgba(37, 211, 102, 0.3)', backgroundColor: '#121215' },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  cardTitle: { fontSize: 14, fontWeight: 'bold', color: '#ffffff' },
-  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#25D366' },
-  messageText: { fontSize: 12, color: '#a1a1aa', lineHeight: 18, marginBottom: 8 },
-  timeText: { fontSize: 10, color: '#71717a' },
+  screen: { flex: 1, backgroundColor: Colors.background },
+  subtitle: {
+    ...Typography.labelMd,
+    color: Colors.primary,
+    paddingHorizontal: Spacing.marginMobile,
+    paddingTop: Spacing.sm,
+  },
+  listContainer: { padding: Spacing.marginMobile, gap: Spacing.sm, paddingBottom: Spacing.xxl },
+  item: { gap: 4 },
+  unreadItem: {
+    gap: 4,
+    borderColor: `${Colors.tertiary}4D`,
+    backgroundColor: `${Colors.tertiary}0D`,
+  },
+  itemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  itemTitle: {
+    ...Typography.labelMd,
+    color: Colors.onSurface,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.tertiary,
+  },
+  itemMessage: {
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
+  },
+  itemTime: {
+    ...Typography.labelSm,
+    color: Colors.outline,
+  },
 });

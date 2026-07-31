@@ -1,8 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Image, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
+import { Card, SegmentedControl, TopAppBar } from '../components';
+import { Colors, Radius, Spacing, Typography } from '../theme';
 
-export default function MobileWhatsAppPairing() {
-  const [method, setMethod] = useState<'PAIRING_CODE' | 'QR_CODE'>('PAIRING_CODE');
+type PairingMethod = 'code' | 'qr';
+
+const CONNECTION_LOGS = [
+  { event: 'Session Handshake', icon: 'devices' as const, time: 'Today, 10:42 AM' },
+  { event: 'Media Catalog Sync', icon: 'sync' as const, time: 'Today, 09:15 AM' },
+  { event: 'Key Rotation', icon: 'lock' as const, time: 'Yesterday, 11:59 PM' },
+];
+
+export default function PairingScreen() {
+  const router = useRouter();
+  const [method, setMethod] = useState<PairingMethod>('code');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -10,7 +23,7 @@ export default function MobileWhatsAppPairing() {
   const [pollingActive, setPollingActive] = useState(false);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (pollingActive && !isConnected) {
       interval = setInterval(() => {
         // Polling simulation checking connection status
@@ -36,63 +49,107 @@ export default function MobileWhatsAppPairing() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <Text style={styles.title}>WhatsApp Account</Text>
-      <Text style={styles.subtitle}>Connect your single WhatsApp account using Baileys pairing protocol</Text>
+    <View style={styles.screen}>
+      <TopAppBar
+        title="WhatsApp Connection"
+        leftMode="back"
+        onLeftPress={() => router.back()}
+        actions={isConnected ? [{ icon: 'verified-user', accessibilityLabel: 'Connected', onPress: () => {} }] : []}
+      />
 
-      {/* Main Card */}
-      <View style={styles.card}>
-        {/* Connection State Badge */}
-        <View style={styles.statusBox}>
-          <View style={styles.statusLeft}>
-            <View style={[styles.dot, { backgroundColor: isConnected ? '#25D366' : '#f59e0b' }]} />
-            <View>
-              <Text style={styles.statusLabel}>Connection Status</Text>
-              <Text style={styles.statusValue}>{isConnected ? 'CONNECTED' : 'WAITING FOR PAIRING'}</Text>
-            </View>
-          </View>
-          {isConnected && (
-            <TouchableOpacity style={styles.disconnectBtn} onPress={() => setIsConnected(false)}>
-              <Text style={styles.disconnectText}>Disconnect</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {!isConnected && (
+      <ScrollView contentContainerStyle={styles.content}>
+        {isConnected ? (
           <>
-            {/* Method Tabs */}
-            <View style={styles.tabContainer}>
-              <TouchableOpacity
-                style={[styles.tab, method === 'PAIRING_CODE' && styles.activeTab]}
-                onPress={() => { setMethod('PAIRING_CODE'); setPairingCode(null); }}
-              >
-                <Text style={[styles.tabText, method === 'PAIRING_CODE' && styles.activeTabText]}>1. Phone Pairing Code</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tab, method === 'QR_CODE' && styles.activeTab]}
-                onPress={() => { setMethod('QR_CODE'); setPairingCode(null); }}
-              >
-                <Text style={[styles.tabText, method === 'QR_CODE' && styles.activeTabText]}>2. QR Code Fallback</Text>
-              </TouchableOpacity>
+            <Card style={styles.heroCard}>
+              <View style={styles.heroIconCircle}>
+                <MaterialIcons name="verified-user" size={36} color={Colors.primary} />
+              </View>
+              <Text style={styles.heroTitle}>Securely Connected</Text>
+              <Text style={styles.heroDescription}>
+                Your WhatsApp account is actively synchronized with StatusFlow using an encrypted multi-device session.
+              </Text>
+              <View style={styles.heroActions}>
+                <Pressable style={styles.reconnectButton}>
+                  <MaterialIcons name="sync" size={16} color={Colors.onPrimary} />
+                  <Text style={styles.reconnectLabel}>Reconnect</Text>
+                </Pressable>
+                <Pressable style={styles.disconnectButton} onPress={() => setIsConnected(false)}>
+                  <MaterialIcons name="logout" size={16} color={Colors.error} />
+                  <Text style={styles.disconnectLabel}>Disconnect</Text>
+                </Pressable>
+              </View>
+            </Card>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Connection Logs</Text>
+              <View style={styles.logList}>
+                {CONNECTION_LOGS.map((log) => (
+                  <Card key={log.event} style={styles.logRow} padding="sm">
+                    <MaterialIcons name={log.icon} size={20} color={Colors.primary} />
+                    <View style={styles.logText}>
+                      <Text style={styles.logEvent}>{log.event}</Text>
+                      <Text style={styles.logTime}>{log.time}</Text>
+                    </View>
+                    <View style={styles.successPill}>
+                      <Text style={styles.successPillLabel}>Success</Text>
+                    </View>
+                  </Card>
+                ))}
+              </View>
             </View>
 
-            {/* Method 1: Pairing Code */}
-            {method === 'PAIRING_CODE' && (
-              <View style={styles.methodContent}>
+            <Card style={styles.section}>
+              <Text style={styles.sectionTitle}>Device Details</Text>
+              <DetailRow label="Phone Number" value="+234 812 345 6789" />
+              <DetailRow label="Linked Device" value="Pixel 8" />
+              <DetailRow label="Last Active" value="2 mins ago" last />
+            </Card>
+
+            <View style={[styles.section, styles.securityCard]}>
+              <View style={styles.securityHeader}>
+                <MaterialIcons name="security" size={22} color={Colors.onPrimaryContainer} />
+                <Text style={styles.securityTitle}>Security Policy</Text>
+              </View>
+              <Text style={styles.securityBody}>
+                Connections are powered by the Baileys multi-device protocol — your primary phone doesn't need to stay
+                online, and your messages are never stored on our servers.
+              </Text>
+            </View>
+          </>
+        ) : (
+          <>
+            <SegmentedControl
+              options={[
+                { label: 'Pairing Code', value: 'code' },
+                { label: 'QR Code', value: 'qr' },
+              ]}
+              value={method}
+              onChange={(next) => {
+                setMethod(next);
+                setPairingCode(null);
+              }}
+            />
+
+            {method === 'code' ? (
+              <Card style={styles.section}>
                 {!pairingCode ? (
                   <View style={styles.formGroup}>
-                    <Text style={styles.label}>WhatsApp Phone Number (with Country Code)</Text>
+                    <Text style={styles.label}>WHATSAPP PHONE NUMBER</Text>
                     <TextInput
                       style={styles.input}
                       value={phoneNumber}
                       onChangeText={setPhoneNumber}
                       placeholder="+2348123456789"
-                      placeholderTextColor="#71717a"
+                      placeholderTextColor={Colors.outline}
                       keyboardType="phone-pad"
                     />
-                    <TouchableOpacity style={styles.actionBtn} onPress={handleRequestCode} disabled={loading}>
-                      {loading ? <ActivityIndicator color="#09090b" /> : <Text style={styles.actionBtnText}>Request 8-Digit Pairing Code</Text>}
-                    </TouchableOpacity>
+                    <Pressable style={styles.primaryButton} onPress={handleRequestCode} disabled={loading}>
+                      {loading ? (
+                        <ActivityIndicator color={Colors.onPrimary} />
+                      ) : (
+                        <Text style={styles.primaryButtonLabel}>Request Pairing Code</Text>
+                      )}
+                    </Pressable>
                   </View>
                 ) : (
                   <View style={styles.codeContainer}>
@@ -100,75 +157,200 @@ export default function MobileWhatsAppPairing() {
                     <View style={styles.codeBox}>
                       <Text style={styles.codeText}>{pairingCode}</Text>
                     </View>
-                    <TouchableOpacity style={styles.actionBtn} onPress={handleSimulatePair}>
-                      <Text style={styles.actionBtnText}>Simulate Pairing Complete</Text>
-                    </TouchableOpacity>
+                    <Pressable style={styles.primaryButton} onPress={handleSimulatePair}>
+                      <Text style={styles.primaryButtonLabel}>I've entered the code</Text>
+                    </Pressable>
                   </View>
                 )}
-              </View>
-            )}
-
-            {/* Method 2: QR Code */}
-            {method === 'QR_CODE' && (
-              <View style={styles.codeContainer}>
-                <Text style={styles.instructions}>Open WhatsApp → Linked Devices → Scan QR Code</Text>
-                <View style={styles.qrWrapper}>
-                  <Image
-                    source={{ uri: 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=STATUSFLOW-MOBILE-PAIR' }}
-                    style={styles.qrImage}
-                  />
+              </Card>
+            ) : (
+              <Card style={styles.section}>
+                <View style={styles.codeContainer}>
+                  <Text style={styles.instructions}>Open WhatsApp → Linked Devices → Scan QR Code</Text>
+                  <View style={styles.qrWrapper}>
+                    <Image
+                      source={{ uri: 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=STATUSFLOW-MOBILE-PAIR' }}
+                      style={styles.qrImage}
+                    />
+                  </View>
+                  <Pressable style={styles.primaryButton} onPress={handleSimulatePair}>
+                    <Text style={styles.primaryButtonLabel}>I've scanned the code</Text>
+                  </Pressable>
                 </View>
-                <TouchableOpacity style={styles.actionBtn} onPress={handleSimulatePair}>
-                  <Text style={styles.actionBtnText}>Simulate QR Scan Complete</Text>
-                </TouchableOpacity>
-              </View>
+              </Card>
             )}
           </>
         )}
-
-        {/* Live Logs */}
-        <View style={styles.logsBox}>
-          <Text style={styles.logsTitle}>Live Socket Event Logs</Text>
-          <Text style={styles.logLine}>[INFO]: Baileys mobile socket ready.</Text>
-          {isConnected && <Text style={styles.logLineSuccess}>[SUCCESS]: Socket state connected.</Text>}
-        </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
+const DetailRow: React.FC<{ label: string; value: string; last?: boolean }> = ({ label, value, last }) => (
+  <View style={[styles.detailRow, !last && styles.detailRowDivider]}>
+    <Text style={styles.detailLabel}>{label}</Text>
+    <Text style={styles.detailValue}>{value}</Text>
+  </View>
+);
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#09090b' },
-  contentContainer: { padding: 20, paddingBottom: 40 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' },
-  subtitle: { fontSize: 13, color: '#a1a1aa', textAlign: 'center', marginBottom: 20, marginTop: 4 },
-  card: { backgroundColor: '#18181b', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#27272a' },
-  statusBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#09090b', padding: 14, borderRadius: 14, marginBottom: 16 },
-  statusLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
-  statusLabel: { fontSize: 11, color: '#71717a' },
-  statusValue: { fontSize: 13, fontWeight: 'bold', color: '#ffffff' },
-  disconnectBtn: { backgroundColor: 'rgba(239, 68, 68, 0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.2)' },
-  disconnectText: { color: '#f87171', fontSize: 11, fontWeight: '600' },
-  tabContainer: { flexDirection: 'row', backgroundColor: '#09090b', borderRadius: 12, padding: 4, marginBottom: 16 },
-  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
-  activeTab: { backgroundColor: '#25D366' },
-  tabText: { fontSize: 11, fontWeight: '600', color: '#a1a1aa' },
-  activeTabText: { color: '#09090b' },
-  methodContent: { marginBottom: 16 },
-  formGroup: { gap: 8 },
-  label: { fontSize: 12, color: '#a1a1aa' },
-  input: { backgroundColor: '#09090b', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: '#ffffff', fontSize: 14, borderWidth: 1, borderColor: '#27272a' },
-  actionBtn: { backgroundColor: '#25D366', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 12 },
-  actionBtnText: { color: '#09090b', fontWeight: 'bold', fontSize: 13 },
-  codeContainer: { alignItems: 'center', gap: 12, marginVertical: 8 },
-  instructions: { fontSize: 12, color: '#a1a1aa', textAlign: 'center' },
-  codeBox: { backgroundColor: '#09090b', borderWidth: 1, borderColor: 'rgba(37, 211, 102, 0.3)', borderRadius: 16, paddingHorizontal: 24, paddingVertical: 16, marginVertical: 8 },
-  codeText: { fontSize: 28, fontWeight: 'bold', color: '#25D366', letterSpacing: 4 },
-  qrWrapper: { backgroundColor: '#ffffff', padding: 12, borderRadius: 16, marginVertical: 8 },
+  screen: { flex: 1, backgroundColor: Colors.background },
+  content: { padding: Spacing.marginMobile, paddingBottom: Spacing.xxl, gap: Spacing.lg },
+  heroCard: { alignItems: 'center', gap: Spacing.sm },
+  heroIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: Radius.full,
+    backgroundColor: `${Colors.primary}14`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroTitle: {
+    ...Typography.headlineMd,
+    color: Colors.onSurface,
+  },
+  heroDescription: {
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
+    textAlign: 'center',
+  },
+  heroActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
+  reconnectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.lg,
+  },
+  reconnectLabel: {
+    ...Typography.labelMd,
+    color: Colors.onPrimary,
+  },
+  disconnectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: Colors.error,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.lg,
+  },
+  disconnectLabel: {
+    ...Typography.labelMd,
+    color: Colors.error,
+  },
+  section: { gap: Spacing.sm },
+  sectionTitle: {
+    ...Typography.headlineSm,
+    color: Colors.onSurface,
+  },
+  logList: { gap: Spacing.sm },
+  logRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  logText: { flex: 1 },
+  logEvent: {
+    ...Typography.labelMd,
+    color: Colors.onSurface,
+  },
+  logTime: {
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
+  },
+  successPill: {
+    backgroundColor: `${Colors.tertiary}1A`,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+  },
+  successPillLabel: {
+    ...Typography.labelSm,
+    color: Colors.tertiary,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.sm,
+  },
+  detailRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.outlineVariant,
+  },
+  detailLabel: {
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
+  },
+  detailValue: {
+    ...Typography.labelMd,
+    color: Colors.onSurface,
+  },
+  securityCard: {
+    backgroundColor: Colors.primaryContainer,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
+  },
+  securityHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  securityTitle: {
+    ...Typography.headlineSm,
+    color: Colors.onPrimaryContainer,
+  },
+  securityBody: {
+    ...Typography.bodySm,
+    color: Colors.onPrimaryContainer,
+    opacity: 0.9,
+  },
+  formGroup: { gap: Spacing.sm },
+  label: {
+    ...Typography.labelSm,
+    color: Colors.onSurfaceVariant,
+  },
+  input: {
+    ...Typography.bodyMd,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    color: Colors.onSurface,
+  },
+  primaryButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.lg,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+    marginTop: Spacing.sm,
+  },
+  primaryButtonLabel: {
+    ...Typography.labelMd,
+    color: Colors.onPrimary,
+  },
+  codeContainer: { alignItems: 'center', gap: Spacing.sm },
+  instructions: {
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
+    textAlign: 'center',
+  },
+  codeBox: {
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: Radius.xl,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+  },
+  codeText: {
+    fontSize: 28,
+    fontFamily: 'Inter_700Bold',
+    color: Colors.primary,
+    letterSpacing: 4,
+  },
+  qrWrapper: {
+    backgroundColor: '#ffffff',
+    padding: Spacing.md,
+    borderRadius: Radius.xl,
+  },
   qrImage: { width: 160, height: 160 },
-  logsBox: { backgroundColor: '#09090b', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#27272a', marginTop: 8 },
-  logsTitle: { fontSize: 11, fontWeight: '600', color: '#a1a1aa', marginBottom: 6 },
-  logLine: { fontSize: 11, fontFamily: 'monospace', color: '#71717a' },
-  logLineSuccess: { fontSize: 11, fontFamily: 'monospace', color: '#25D366', marginTop: 2 },
 });

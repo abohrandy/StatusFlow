@@ -1,9 +1,13 @@
 import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/useAuthStore';
 import { apiClient } from '../../lib/apiClient';
+import { Card } from '../../components';
+import { Colors, Radius, Spacing, Typography } from '../../theme';
 
-export default function MobileLogin() {
+export default function LoginScreen() {
+  const router = useRouter();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [loading, setLoading] = React.useState(false);
@@ -35,110 +39,127 @@ export default function MobileLogin() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.card}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Card style={styles.card}>
         <Text style={styles.title}>StatusFlow</Text>
         <Text style={styles.subtitle}>Sign in to your account</Text>
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {!!error && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Email Address</Text>
+          <Text style={styles.label}>EMAIL ADDRESS</Text>
           <TextInput
             style={styles.input}
             value={email}
             onChangeText={setEmail}
             placeholder="you@company.com"
-            placeholderTextColor="#71717a"
+            placeholderTextColor={Colors.outline}
             keyboardType="email-address"
             autoCapitalize="none"
           />
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Password</Text>
+          <Text style={styles.label}>PASSWORD</Text>
           <TextInput
             style={styles.input}
             value={password}
             onChangeText={setPassword}
             placeholder="••••••••"
-            placeholderTextColor="#71717a"
+            placeholderTextColor={Colors.outline}
             secureTextEntry
           />
         </View>
 
-        <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
-          {loading ? <ActivityIndicator color="#09090b" /> : <Text style={styles.buttonText}>Sign In</Text>}
-        </TouchableOpacity>
-      </View>
-    </View>
+        <Pressable onPress={() => router.push('/(auth)/forgot-password')}>
+          <Text style={styles.forgotLink}>Forgot password?</Text>
+        </Pressable>
+
+        <Pressable style={styles.button} onPress={handleLogin} disabled={loading}>
+          {loading ? <ActivityIndicator color={Colors.onPrimary} /> : <Text style={styles.buttonLabel}>Sign In</Text>}
+        </Pressable>
+
+        <View style={styles.footerRow}>
+          <Text style={styles.footerText}>Don't have an account? </Text>
+          <Pressable onPress={() => router.push('/(auth)/register')}>
+            <Text style={styles.footerLink}>Sign Up</Text>
+          </Pressable>
+        </View>
+      </Card>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#09090b',
-    padding: 20,
-    justifyContent: 'center',
-  },
-  card: {
-    backgroundColor: '#18181b',
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#27272a',
-  },
+  screen: { flex: 1, backgroundColor: Colors.background, padding: Spacing.marginMobile, justifyContent: 'center' },
+  card: { padding: Spacing.lg, gap: Spacing.sm },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#25D366',
+    ...Typography.headlineLg,
+    color: Colors.primary,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 14,
-    color: '#a1a1aa',
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
     textAlign: 'center',
-    marginBottom: 24,
-    marginTop: 4,
+    marginBottom: Spacing.sm,
+  },
+  errorBanner: {
+    backgroundColor: Colors.errorContainer,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
   },
   errorText: {
-    color: '#f87171',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    padding: 10,
-    borderRadius: 8,
+    ...Typography.labelSm,
+    color: Colors.error,
     textAlign: 'center',
-    marginBottom: 16,
-    fontSize: 12,
   },
-  fieldGroup: {
-    marginBottom: 16,
-  },
+  fieldGroup: { gap: 6 },
   label: {
-    fontSize: 12,
-    color: '#a1a1aa',
-    marginBottom: 6,
+    ...Typography.labelSm,
+    color: Colors.onSurfaceVariant,
   },
   input: {
-    backgroundColor: '#09090b',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: '#ffffff',
-    fontSize: 14,
+    ...Typography.bodyMd,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: '#27272a',
+    borderColor: Colors.outlineVariant,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    color: Colors.onSurface,
+  },
+  forgotLink: {
+    ...Typography.labelSm,
+    color: Colors.primary,
+    textAlign: 'right',
   },
   button: {
-    backgroundColor: '#25D366',
-    borderRadius: 12,
-    paddingVertical: 14,
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.lg,
+    paddingVertical: Spacing.md,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: Spacing.xs,
   },
-  buttonText: {
-    color: '#09090b',
-    fontWeight: 'bold',
-    fontSize: 14,
+  buttonLabel: {
+    ...Typography.labelMd,
+    color: Colors.onPrimary,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: Spacing.sm,
+  },
+  footerText: {
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
+  },
+  footerLink: {
+    ...Typography.labelMd,
+    color: Colors.primary,
   },
 });

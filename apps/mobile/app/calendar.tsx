@@ -1,113 +1,203 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Card, EmptyState, TopAppBar } from '../components';
+import { Colors, Radius, Spacing, Typography } from '../theme';
 
-export default function MobileCalendarView() {
-  const [viewMode, setViewMode] = useState<'MONTHLY' | 'WEEKLY' | 'DAILY'>('MONTHLY');
-  const [searchQuery, setSearchQuery] = useState('');
+interface DayEvent {
+  title: string;
+  time: string;
+  status: 'success' | 'primary';
+}
 
-  const events = [
-    { id: 'ev_1', title: 'Flash Sale Alert! 30% Off Storewide 🔥', date: 'Jul 28', time: '02:30 PM', status: 'QUEUED', color: '#25D366' },
-    { id: 'ev_2', title: 'New Product Unboxing 🎥', date: 'Jul 29', time: '09:00 AM', status: 'SCHEDULED', color: '#3b82f6' },
-  ];
+// Sample events keyed by day-of-month, for demonstration — a real backend would supply these.
+const SAMPLE_EVENTS: Record<number, DayEvent[]> = {
+  1: [{ title: 'Project Launch Announcement', time: '9:00 AM', status: 'primary' }],
+  12: [
+    { title: 'Product Showcase: Minimalist Collection', time: '9:00 AM', status: 'success' },
+    { title: 'Webinar Reminder: Workflow Mastery', time: '9:00 PM', status: 'primary' },
+  ],
+};
 
-  const filteredEvents = events.filter((e) => e.title.toLowerCase().includes(searchQuery.toLowerCase()));
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function buildMonthGrid(year: number, month: number): (number | null)[] {
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (number | null)[] = Array.from({ length: firstWeekday }, () => null);
+  for (let day = 1; day <= daysInMonth; day++) cells.push(day);
+  return cells;
+}
+
+export default function CalendarScreen() {
+  const router = useRouter();
+  const today = new Date();
+  const [cursor, setCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
+  const [selectedDay, setSelectedDay] = useState(today.getDate());
+
+  const grid = useMemo(() => buildMonthGrid(cursor.getFullYear(), cursor.getMonth()), [cursor]);
+  const isCurrentMonth = cursor.getFullYear() === today.getFullYear() && cursor.getMonth() === today.getMonth();
+  const dayEvents = isCurrentMonth ? SAMPLE_EVENTS[selectedDay] : undefined;
+
+  const changeMonth = (delta: number) => {
+    setCursor((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+    setSelectedDay(1);
+  };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>History & Calendar</Text>
-      <Text style={styles.subtitle}>Calendar schedule & execution history log</Text>
+    <View style={styles.screen}>
+      <TopAppBar title="Schedule" leftMode="back" onLeftPress={() => router.back()} />
 
-      {/* View Mode Selector Tabs */}
-      <View style={styles.tabContainer}>
-        {(['MONTHLY', 'WEEKLY', 'DAILY'] as const).map((mode) => (
-          <TouchableOpacity
-            key={mode}
-            style={[styles.tab, viewMode === mode && styles.activeTab]}
-            onPress={() => setViewMode(mode)}
-          >
-            <Text style={[styles.tabText, viewMode === mode && styles.activeTabText]}>{mode}</Text>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.monthNav}>
+        <Pressable onPress={() => changeMonth(-1)} hitSlop={8} style={styles.navButton}>
+          <Text style={styles.navArrow}>‹</Text>
+        </Pressable>
+        <Text style={styles.monthLabel}>
+          {MONTH_NAMES[cursor.getMonth()]} {cursor.getFullYear()}
+        </Text>
+        <Pressable onPress={() => changeMonth(1)} hitSlop={8} style={styles.navButton}>
+          <Text style={styles.navArrow}>›</Text>
+        </Pressable>
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchBox}>
-        <TextInput
-          style={styles.searchInput}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Filter calendar events..."
-          placeholderTextColor="#71717a"
-        />
-      </View>
-
-      {/* Calendar View Container */}
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.calendarCard}>
-          <Text style={styles.calendarMonthTitle}>July 2026</Text>
-          
-          {/* Days Grid Simulation */}
-          <View style={styles.daysGrid}>
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-              <Text key={i} style={styles.dayHeader}>{day}</Text>
-            ))}
-            {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-              <View key={day} style={[styles.dayCell, day === 28 && styles.activeDayCell]}>
-                <Text style={[styles.dayCellText, day === 28 && styles.activeDayCellText]}>{day}</Text>
-                {day === 28 && <View style={styles.eventDot} />}
-              </View>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Card padding="sm">
+          <View style={styles.weekdayRow}>
+            {WEEKDAY_LABELS.map((label) => (
+              <Text key={label} style={styles.weekdayLabel}>
+                {label}
+              </Text>
             ))}
           </View>
-        </View>
-
-        {/* Daily Agenda List */}
-        <View style={styles.agendaCard}>
-          <Text style={styles.agendaTitle}>Agenda & Execution Logs</Text>
-
-          <View style={styles.eventList}>
-            {filteredEvents.map((item) => (
-              <View key={item.id} style={styles.eventRow}>
-                <View style={[styles.statusColorBar, { backgroundColor: item.color }]} />
-                <View style={styles.eventDetails}>
-                  <Text style={styles.eventTitle} numberOfLines={1}>{item.title}</Text>
-                  <Text style={styles.eventMeta}>{item.date} at {item.time} • <Text style={{ color: item.color }}>{item.status}</Text></Text>
-                </View>
-              </View>
-            ))}
+          <View style={styles.grid}>
+            {grid.map((day, index) => {
+              if (day === null) return <View key={`blank-${index}`} style={styles.dayCell} />;
+              const hasEvents = isCurrentMonth && !!SAMPLE_EVENTS[day];
+              const isSelected = isCurrentMonth && day === selectedDay;
+              return (
+                <Pressable key={day} style={styles.dayCell} onPress={() => setSelectedDay(day)}>
+                  <View style={[styles.dayCircle, isSelected && styles.dayCircleSelected]}>
+                    <Text style={[styles.dayLabel, isSelected && styles.dayLabelSelected]}>{day}</Text>
+                  </View>
+                  {hasEvents && !isSelected && <View style={styles.eventDot} />}
+                </Pressable>
+              );
+            })}
           </View>
+        </Card>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>
+              {isCurrentMonth ? `${MONTH_NAMES[cursor.getMonth()]} ${selectedDay}` : 'Select a day'}
+            </Text>
+            <Pressable onPress={() => router.push('/composer')}>
+              <Text style={styles.scheduleLink}>+ Schedule</Text>
+            </Pressable>
+          </View>
+
+          {dayEvents && dayEvents.length > 0 ? (
+            <View style={styles.eventList}>
+              {dayEvents.map((event) => (
+                <Card key={event.title} style={styles.eventCard}>
+                  <Text style={styles.eventTime}>{event.time}</Text>
+                  <Text style={styles.eventTitle}>{event.title}</Text>
+                </Card>
+              ))}
+            </View>
+          ) : (
+            <EmptyState icon="event-available" title="No status scheduled" subtitle="Tap Schedule to add one for this day." />
+          )}
         </View>
       </ScrollView>
     </View>
   );
 }
 
+const CELL_SIZE = '14.28%';
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#09090b', padding: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' },
-  subtitle: { fontSize: 13, color: '#a1a1aa', textAlign: 'center', marginBottom: 20, marginTop: 4 },
-  tabContainer: { flexDirection: 'row', backgroundColor: '#18181b', borderRadius: 14, padding: 4, marginBottom: 16, borderWidth: 1, borderColor: '#27272a' },
-  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
-  activeTab: { backgroundColor: '#25D366' },
-  tabText: { fontSize: 11, fontWeight: '600', color: '#a1a1aa' },
-  activeTabText: { color: '#09090b' },
-  searchBox: { marginBottom: 16 },
-  searchInput: { backgroundColor: '#18181b', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: '#ffffff', fontSize: 14, borderWidth: 1, borderColor: '#27272a' },
-  scrollContainer: { paddingBottom: 40 },
-  calendarCard: { backgroundColor: '#18181b', borderRadius: 20, padding: 20, marginBottom: 20, borderWidth: 1, borderColor: '#27272a' },
-  calendarMonthTitle: { fontSize: 16, fontWeight: 'bold', color: '#ffffff', marginBottom: 16, textAlign: 'center' },
-  daysGrid: { flexDirection: 'row', flexWrap: 'wrap', width: '100%' },
-  dayHeader: { width: '14.28%', textAlign: 'center', color: '#71717a', fontSize: 12, fontWeight: '600', marginBottom: 12 },
-  dayCell: { width: '14.28%', height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 10, marginBottom: 4 },
-  activeDayCell: { backgroundColor: '#25D366' },
-  dayCellText: { color: '#a1a1aa', fontSize: 12 },
-  activeDayCellText: { color: '#09090b', fontWeight: 'bold' },
-  eventDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#09090b', marginTop: 2 },
-  agendaCard: { backgroundColor: '#18181b', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#27272a' },
-  agendaTitle: { fontSize: 16, fontWeight: 'bold', color: '#ffffff', marginBottom: 16 },
-  eventList: { gap: 12 },
-  eventRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#09090b', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#27272a' },
-  statusColorBar: { width: 4, height: 36, borderRadius: 2, marginRight: 12 },
-  eventDetails: { flex: 1 },
-  eventTitle: { fontSize: 13, fontWeight: '600', color: '#ffffff' },
-  eventMeta: { fontSize: 11, color: '#71717a', marginTop: 2 },
+  screen: { flex: 1, backgroundColor: Colors.background },
+  monthNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.lg,
+    paddingVertical: Spacing.sm,
+  },
+  navButton: { padding: Spacing.xs },
+  navArrow: {
+    fontSize: 24,
+    color: Colors.onSurface,
+  },
+  monthLabel: {
+    ...Typography.headlineSm,
+    color: Colors.onSurface,
+    minWidth: 160,
+    textAlign: 'center',
+  },
+  content: { padding: Spacing.marginMobile, paddingBottom: Spacing.xxl, gap: Spacing.lg },
+  weekdayRow: { flexDirection: 'row' },
+  weekdayLabel: {
+    width: CELL_SIZE,
+    textAlign: 'center',
+    ...Typography.labelSm,
+    color: Colors.outline,
+    marginBottom: Spacing.sm,
+  },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  dayCell: {
+    width: CELL_SIZE,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayCircleSelected: { backgroundColor: Colors.primary },
+  dayLabel: {
+    ...Typography.bodySm,
+    color: Colors.onSurface,
+  },
+  dayLabelSelected: { color: Colors.onPrimary, fontFamily: 'Inter_600SemiBold' },
+  eventDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.tertiary,
+    marginTop: 2,
+  },
+  section: { gap: Spacing.sm },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionTitle: {
+    ...Typography.headlineSm,
+    color: Colors.onSurface,
+  },
+  scheduleLink: {
+    ...Typography.labelMd,
+    color: Colors.primary,
+  },
+  eventList: { gap: Spacing.sm },
+  eventCard: { gap: 4 },
+  eventTime: {
+    ...Typography.labelSm,
+    color: Colors.primary,
+  },
+  eventTitle: {
+    ...Typography.labelMd,
+    color: Colors.onSurface,
+  },
 });

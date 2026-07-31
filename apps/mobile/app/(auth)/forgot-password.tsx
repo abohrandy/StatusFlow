@@ -1,7 +1,11 @@
 import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Card } from '../../components';
+import { Colors, Radius, Spacing, Typography } from '../../theme';
 
-export default function MobileForgotPassword() {
+export default function ForgotPasswordScreen() {
+  const router = useRouter();
   const [email, setEmail] = React.useState('');
   const [sent, setSent] = React.useState(false);
 
@@ -10,101 +14,100 @@ export default function MobileForgotPassword() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.card}>
+    <View style={styles.screen}>
+      <Card style={styles.card}>
         <Text style={styles.title}>Reset Password</Text>
         <Text style={styles.subtitle}>Enter your email to receive recovery instructions</Text>
 
         {sent ? (
-          <Text style={styles.successText}>Password reset instructions sent to {email}!</Text>
+          <View style={styles.successBanner}>
+            <Text style={styles.successText}>Password reset instructions sent to {email}!</Text>
+          </View>
         ) : (
           <>
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Email Address</Text>
+              <Text style={styles.label}>EMAIL ADDRESS</Text>
               <TextInput
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
                 placeholder="you@company.com"
-                placeholderTextColor="#71717a"
+                placeholderTextColor={Colors.outline}
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
             </View>
 
-            <TouchableOpacity style={styles.button} onPress={handleReset}>
-              <Text style={styles.buttonText}>Send Reset Link</Text>
-            </TouchableOpacity>
+            <Pressable style={styles.button} onPress={handleReset}>
+              <Text style={styles.buttonLabel}>Send Reset Link</Text>
+            </Pressable>
           </>
         )}
-      </View>
+
+        <Pressable onPress={() => router.push('/(auth)/login')} style={styles.footerRow}>
+          <Text style={styles.footerLink}>Back to Sign In</Text>
+        </Pressable>
+      </Card>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#09090b',
-    padding: 20,
-    justifyContent: 'center',
-  },
-  card: {
-    backgroundColor: '#18181b',
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#27272a',
-  },
+  screen: { flex: 1, backgroundColor: Colors.background, padding: Spacing.marginMobile, justifyContent: 'center' },
+  card: { padding: Spacing.lg, gap: Spacing.sm },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
+    ...Typography.headlineLg,
+    color: Colors.onSurface,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 14,
-    color: '#a1a1aa',
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
     textAlign: 'center',
-    marginBottom: 24,
-    marginTop: 4,
+    marginBottom: Spacing.sm,
+  },
+  successBanner: {
+    backgroundColor: `${Colors.tertiary}1A`,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
   },
   successText: {
-    color: '#34d399',
-    backgroundColor: 'rgba(52, 211, 153, 0.1)',
-    padding: 14,
-    borderRadius: 12,
+    ...Typography.bodySm,
+    color: Colors.tertiary,
     textAlign: 'center',
-    fontSize: 13,
   },
-  fieldGroup: {
-    marginBottom: 16,
-  },
+  fieldGroup: { gap: 6 },
   label: {
-    fontSize: 12,
-    color: '#a1a1aa',
-    marginBottom: 6,
+    ...Typography.labelSm,
+    color: Colors.onSurfaceVariant,
   },
   input: {
-    backgroundColor: '#09090b',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: '#ffffff',
-    fontSize: 14,
+    ...Typography.bodyMd,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: '#27272a',
+    borderColor: Colors.outlineVariant,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    color: Colors.onSurface,
   },
   button: {
-    backgroundColor: '#25D366',
-    borderRadius: 12,
-    paddingVertical: 14,
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.lg,
+    paddingVertical: Spacing.md,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: Spacing.xs,
   },
-  buttonText: {
-    color: '#09090b',
-    fontWeight: 'bold',
-    fontSize: 14,
+  buttonLabel: {
+    ...Typography.labelMd,
+    color: Colors.onPrimary,
+  },
+  footerRow: {
+    marginTop: Spacing.md,
+    alignItems: 'center',
+  },
+  footerLink: {
+    ...Typography.labelMd,
+    color: Colors.primary,
   },
 });

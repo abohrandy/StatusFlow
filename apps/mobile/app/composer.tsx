@@ -1,169 +1,281 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
+import { SegmentedControl, TopAppBar } from '../components';
+import { Colors, Radius, Spacing, Typography } from '../theme';
 
-export default function MobileStatusComposer() {
-  const [statusType, setStatusType] = useState<'TEXT' | 'IMAGE' | 'VIDEO'>('TEXT');
+const SWATCHES = ['#128C7E', '#075E54', '#004ac6', '#4b41e1', '#006242', '#ba1a1a'];
+const EMOJIS = ['🔥', '🚀', '🎉', '❤️', '👏', '⚡', '✨', '💯'];
+const MAX_CAPTION_LENGTH = 700;
+
+type StatusType = 'text' | 'image' | 'video';
+
+export default function ComposerScreen() {
+  const router = useRouter();
+  const [statusType, setStatusType] = useState<StatusType>('image');
   const [caption, setCaption] = useState('');
-  const [selectedColor, setSelectedColor] = useState('#128C7E');
+  const [selectedColor, setSelectedColor] = useState(SWATCHES[0]);
   const [saving, setSaving] = useState(false);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-
-  const colors = ['#128C7E', '#075E54', '#25D366', '#3b82f6', '#8b5cf6', '#ec4899', '#f97316'];
-  const emojis = ['🔥', '🚀', '🎉', '❤️', '👏', '⚡', '✨', '💯'];
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const handleSaveDraft = () => {
     setSaving(true);
     setTimeout(() => {
       setSaving(false);
-      setSuccessMsg('Draft saved successfully!');
-      setTimeout(() => setSuccessMsg(null), 3000);
+      setSuccessMessage('Draft saved successfully!');
+      setTimeout(() => setSuccessMessage(null), 3000);
     }, 500);
   };
 
   const handleScheduleStatus = () => {
-    if (!caption && statusType === 'TEXT') {
-      Alert.alert('Validation Error', 'Please enter a status text caption.');
+    if (!caption && statusType === 'text') {
+      Alert.alert('Add a caption', 'Please enter a status text caption.');
       return;
     }
     setSaving(true);
     setTimeout(() => {
       setSaving(false);
-      setSuccessMsg('Status scheduled for broadcast!');
+      setSuccessMessage('Status scheduled successfully!');
       setCaption('');
-      setTimeout(() => setSuccessMsg(null), 3000);
+      setTimeout(() => setSuccessMessage(null), 2000);
     }, 800);
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.title}>Status Composer</Text>
-        <Text style={styles.subtitle}>Create text, image, or video WhatsApp status broadcasts</Text>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <TopAppBar title="Create Status" leftMode="close" onLeftPress={() => router.back()} />
 
-        {successMsg ? <Text style={styles.successBanner}>{successMsg}</Text> : null}
+      <ScrollView contentContainerStyle={styles.content}>
+        {successMessage && (
+          <View style={styles.banner}>
+            <Text style={styles.bannerText}>{successMessage}</Text>
+          </View>
+        )}
 
-        {/* Status Type Selector */}
-        <View style={styles.typeSelector}>
-          {(['TEXT', 'IMAGE', 'VIDEO'] as const).map((type) => (
-            <TouchableOpacity
-              key={type}
-              style={[styles.typeBtn, statusType === type && styles.activeTypeBtn]}
-              onPress={() => setStatusType(type)}
-            >
-              <Text style={[styles.typeBtnText, statusType === type && styles.activeTypeBtnText]}>{type}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <SegmentedControl
+          options={[
+            { label: 'Image', value: 'image' },
+            { label: 'Video', value: 'video' },
+            { label: 'Text-only', value: 'text' },
+          ]}
+          value={statusType}
+          onChange={setStatusType}
+        />
 
-        {/* Live Smartphone Frame Preview */}
-        <View style={[styles.previewFrame, { backgroundColor: statusType === 'TEXT' ? selectedColor : '#18181b' }]}>
+        {/* Live WhatsApp-style preview */}
+        <View style={[styles.previewFrame, { backgroundColor: statusType === 'text' ? selectedColor : Colors.onBackground }]}>
           <View style={styles.previewHeader}>
             <Text style={styles.previewUser}>Your Status</Text>
             <Text style={styles.previewTime}>Just now</Text>
           </View>
 
           <View style={styles.previewBody}>
-            {statusType === 'TEXT' ? (
+            {statusType === 'text' ? (
               <Text style={styles.previewText}>{caption || 'Type your status message...'}</Text>
             ) : (
               <View style={styles.mediaPlaceholder}>
-                <Text style={styles.mediaIcon}>{statusType === 'IMAGE' ? '🖼️' : '🎥'}</Text>
-                <Text style={styles.mediaLabel}>Tap to Select {statusType} from Library</Text>
+                <MaterialIcons name={statusType === 'image' ? 'image' : 'videocam'} size={36} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.mediaLabel}>Tap to select {statusType} from library</Text>
               </View>
             )}
           </View>
 
-          {statusType !== 'TEXT' && caption ? (
+          {statusType !== 'text' && !!caption && (
             <View style={styles.previewCaptionBox}>
               <Text style={styles.previewCaptionText}>{caption}</Text>
             </View>
-          ) : null}
+          )}
         </View>
 
-        {/* Color Palette Selector for Text Statuses */}
-        {statusType === 'TEXT' && (
+        {statusType === 'text' && (
           <View style={styles.colorRow}>
-            {colors.map((c) => (
-              <TouchableOpacity
-                key={c}
-                style={[styles.colorDot, { backgroundColor: c }, selectedColor === c && styles.selectedColorDot]}
-                onPress={() => setSelectedColor(c)}
+            {SWATCHES.map((color) => (
+              <Pressable
+                key={color}
+                onPress={() => setSelectedColor(color)}
+                style={[styles.colorDot, { backgroundColor: color }, selectedColor === color && styles.colorDotSelected]}
               />
             ))}
           </View>
         )}
 
-        {/* Caption Entry */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Status Caption / Text</Text>
+        {statusType !== 'text' && (
+          <Pressable style={styles.uploadZone}>
+            <MaterialIcons name="upload-file" size={28} color={Colors.primary} />
+            <Text style={styles.uploadTitle}>Click or drag media</Text>
+            <Text style={styles.uploadSubtitle}>Supports JPG, PNG, MP4 up to 50MB</Text>
+          </Pressable>
+        )}
+
+        <View style={styles.captionGroup}>
+          <View style={styles.captionHeader}>
+            <Text style={styles.label}>STATUS CAPTION</Text>
+            <Text style={styles.charCount}>
+              {caption.length} / {MAX_CAPTION_LENGTH}
+            </Text>
+          </View>
           <TextInput
             style={styles.textArea}
             value={caption}
-            onChangeText={setCaption}
-            placeholder="Write status caption or message..."
-            placeholderTextColor="#71717a"
+            onChangeText={(text) => setCaption(text.slice(0, MAX_CAPTION_LENGTH))}
+            placeholder="Type a status update..."
+            placeholderTextColor={Colors.outline}
             multiline
-            numberOfLines={4}
           />
-        </View>
-
-        {/* Emoji Quick Picker */}
-        <View style={styles.emojiRow}>
-          {emojis.map((emoji) => (
-            <TouchableOpacity key={emoji} style={styles.emojiBtn} onPress={() => setCaption((prev) => prev + emoji)}>
-              <Text style={styles.emojiText}>{emoji}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.draftBtn} onPress={handleSaveDraft} disabled={saving}>
-            <Text style={styles.draftBtnText}>Save Draft</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.publishBtn} onPress={handleScheduleStatus} disabled={saving}>
-            <Text style={styles.publishBtnText}>{saving ? 'Scheduling...' : 'Schedule Status'}</Text>
-          </TouchableOpacity>
+          <View style={styles.emojiRow}>
+            {EMOJIS.map((emoji) => (
+              <Pressable key={emoji} onPress={() => setCaption((prev) => (prev + emoji).slice(0, MAX_CAPTION_LENGTH))}>
+                <Text style={styles.emoji}>{emoji}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
       </ScrollView>
+
+      <View style={styles.actionBar}>
+        <Pressable onPress={handleSaveDraft} disabled={saving}>
+          <Text style={styles.draftLabel}>Save Draft</Text>
+        </Pressable>
+        <Pressable style={styles.scheduleButton} onPress={handleScheduleStatus} disabled={saving}>
+          <MaterialIcons name="schedule" size={18} color={Colors.onPrimary} />
+          <Text style={styles.scheduleLabel}>{saving ? 'Scheduling...' : 'Schedule Status'}</Text>
+        </Pressable>
+      </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#09090b' },
-  contentContainer: { padding: 20, paddingBottom: 40 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' },
-  subtitle: { fontSize: 13, color: '#a1a1aa', textAlign: 'center', marginBottom: 20, marginTop: 4 },
-  successBanner: { color: '#34d399', backgroundColor: 'rgba(52, 211, 153, 0.1)', padding: 12, borderRadius: 12, textAlign: 'center', marginBottom: 16, fontSize: 12, fontWeight: '600' },
-  typeSelector: { flexDirection: 'row', backgroundColor: '#18181b', borderRadius: 14, padding: 4, marginBottom: 20, borderWidth: 1, borderColor: '#27272a' },
-  typeBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
-  activeTypeBtn: { backgroundColor: '#25D366' },
-  typeBtnText: { fontSize: 12, fontWeight: '600', color: '#a1a1aa' },
-  activeTypeBtnText: { color: '#09090b' },
-  previewFrame: { borderRadius: 24, padding: 20, minHeight: 220, justifyContent: 'space-between', marginBottom: 20, borderWidth: 1, borderColor: '#27272a' },
-  previewHeader: { flexDirection: 'row', justifyBetween: 'space-between', alignItems: 'center' },
-  previewUser: { fontSize: 13, fontWeight: 'bold', color: '#ffffff' },
-  previewTime: { fontSize: 11, color: 'rgba(255, 255, 255, 0.7)' },
-  previewBody: { flex: 1, justifyContent: 'center', alignItems: 'center', marginVertical: 16 },
-  previewText: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' },
-  mediaPlaceholder: { alignItems: 'center', gap: 8 },
-  mediaIcon: { fontSize: 36 },
-  mediaLabel: { fontSize: 12, color: '#a1a1aa' },
-  previewCaptionBox: { backgroundColor: 'rgba(0, 0, 0, 0.6)', padding: 10, borderRadius: 10 },
-  previewCaptionText: { color: '#ffffff', fontSize: 12 },
-  colorRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 20 },
-  colorDot: { width: 28, height: 28, borderRadius: 14 },
-  selectedColorDot: { borderWidth: 3, borderColor: '#ffffff' },
-  inputGroup: { marginBottom: 16 },
-  label: { fontSize: 12, color: '#a1a1aa', marginBottom: 6 },
-  textArea: { backgroundColor: '#18181b', borderRadius: 14, padding: 14, color: '#ffffff', fontSize: 14, borderWidth: 1, borderColor: '#27272a', textAlignVertical: 'top', minHeight: 90 },
-  emojiRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  emojiBtn: { backgroundColor: '#18181b', borderRadius: 10, padding: 8, borderWidth: 1, borderColor: '#27272a' },
-  emojiText: { fontSize: 18 },
-  actionRow: { flexDirection: 'row', gap: 12 },
-  draftBtn: { flex: 1, backgroundColor: '#27272a', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  draftBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
-  publishBtn: { flex: 1, backgroundColor: '#25D366', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  publishBtnText: { color: '#09090b', fontWeight: 'bold', fontSize: 13 },
+  screen: { flex: 1, backgroundColor: Colors.background },
+  content: { padding: Spacing.marginMobile, paddingBottom: Spacing.xxl, gap: Spacing.lg },
+  banner: {
+    backgroundColor: `${Colors.tertiary}1A`,
+    borderRadius: Radius.lg,
+    padding: Spacing.sm,
+  },
+  bannerText: {
+    ...Typography.labelMd,
+    color: Colors.tertiary,
+    textAlign: 'center',
+  },
+  previewFrame: {
+    borderRadius: Radius.xxl,
+    padding: Spacing.lg,
+    minHeight: 220,
+    justifyContent: 'space-between',
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  previewUser: {
+    ...Typography.labelMd,
+    color: '#ffffff',
+  },
+  previewTime: {
+    ...Typography.labelSm,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  previewBody: { flex: 1, justifyContent: 'center', alignItems: 'center', marginVertical: Spacing.md },
+  previewText: {
+    ...Typography.headlineSm,
+    color: '#ffffff',
+    textAlign: 'center',
+  },
+  mediaPlaceholder: { alignItems: 'center', gap: Spacing.sm },
+  mediaLabel: {
+    ...Typography.bodySm,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  previewCaptionBox: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    padding: Spacing.sm,
+    borderRadius: Radius.md,
+  },
+  previewCaptionText: {
+    ...Typography.bodySm,
+    color: '#ffffff',
+  },
+  colorRow: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.md },
+  colorDot: { width: 32, height: 32, borderRadius: Radius.full },
+  colorDotSelected: { borderWidth: 3, borderColor: Colors.onSurface },
+  uploadZone: {
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: Colors.outlineVariant,
+    borderRadius: Radius.xxl,
+    paddingVertical: Spacing.xl,
+    alignItems: 'center',
+    gap: Spacing.xs,
+    backgroundColor: Colors.surfaceContainerLow,
+  },
+  uploadTitle: {
+    ...Typography.headlineSm,
+    color: Colors.onSurface,
+  },
+  uploadSubtitle: {
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
+  },
+  captionGroup: { gap: Spacing.sm },
+  captionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  label: {
+    ...Typography.labelSm,
+    color: Colors.onSurfaceVariant,
+  },
+  charCount: {
+    ...Typography.labelSm,
+    color: Colors.outline,
+  },
+  textArea: {
+    ...Typography.bodyMd,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    padding: Spacing.md,
+    minHeight: 100,
+    textAlignVertical: 'top',
+    color: Colors.onSurface,
+  },
+  emojiRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: Radius.xl,
+    padding: Spacing.sm,
+  },
+  emoji: { fontSize: 20 },
+  actionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.marginMobile,
+    paddingVertical: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.outlineVariant,
+    backgroundColor: Colors.surfaceContainerLowest,
+  },
+  draftLabel: {
+    ...Typography.labelMd,
+    color: Colors.primary,
+  },
+  scheduleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.xl,
+  },
+  scheduleLabel: {
+    ...Typography.labelMd,
+    color: Colors.onPrimary,
+  },
 });
