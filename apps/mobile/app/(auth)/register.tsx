@@ -1,8 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuthStore } from '../../store/useAuthStore';
-import { apiClient } from '../../lib/apiClient';
+import { supabase } from '../../lib/supabase';
 import { Card } from '../../components';
 import { Colors, Radius, Spacing, Typography } from '../../theme';
 
@@ -12,28 +11,30 @@ export default function RegisterScreen() {
   const [password, setPassword] = React.useState('');
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
-  const setUser = useAuthStore((state) => state.setUser);
+  const [confirmationSent, setConfirmationSent] = React.useState(false);
 
   const handleRegister = async () => {
     if (!email || !password) {
       setError('Please fill in all fields.');
       return;
     }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
     setLoading(true);
     setError('');
 
-    try {
-      const res = await apiClient.post('/auth/register', { email, password });
-      if (res.data?.user) {
-        setUser(res.data.user);
-      } else {
-        setUser({ id: `user_${Date.now()}`, email, role: 'USER' });
-      }
-    } catch (err: any) {
-      setUser({ id: `user_${Date.now()}`, email, role: 'USER' });
-    } finally {
-      setLoading(false);
+    const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
+    if (signUpError) {
+      setError(signUpError.message);
+    } else if (!data.session) {
+      // Email confirmation is required before a session is issued.
+      setConfirmationSent(true);
     }
+    // If a session was returned immediately, onAuthStateChange in the root
+    // layout picks it up and the auth gate redirects to the dashboard.
+    setLoading(false);
   };
 
   return (
@@ -48,34 +49,44 @@ export default function RegisterScreen() {
           </View>
         )}
 
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>EMAIL ADDRESS</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@company.com"
-            placeholderTextColor={Colors.outline}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
+        {confirmationSent ? (
+          <View style={styles.successBanner}>
+            <Text style={styles.successText}>
+              Check {email} for a confirmation link to finish creating your account.
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>EMAIL ADDRESS</Text>
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@company.com"
+                placeholderTextColor={Colors.outline}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
 
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>PASSWORD</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="••••••••"
-            placeholderTextColor={Colors.outline}
-            secureTextEntry
-          />
-        </View>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>PASSWORD</Text>
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                placeholderTextColor={Colors.outline}
+                secureTextEntry
+              />
+            </View>
 
-        <Pressable style={styles.button} onPress={handleRegister} disabled={loading}>
-          {loading ? <ActivityIndicator color={Colors.onPrimary} /> : <Text style={styles.buttonLabel}>Create Account</Text>}
-        </Pressable>
+            <Pressable style={styles.button} onPress={handleRegister} disabled={loading}>
+              {loading ? <ActivityIndicator color={Colors.onPrimary} /> : <Text style={styles.buttonLabel}>Create Account</Text>}
+            </Pressable>
+          </>
+        )}
 
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>Already have an account? </Text>
@@ -110,6 +121,16 @@ const styles = StyleSheet.create({
   errorText: {
     ...Typography.labelSm,
     color: Colors.error,
+    textAlign: 'center',
+  },
+  successBanner: {
+    backgroundColor: `${Colors.tertiary}1A`,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+  },
+  successText: {
+    ...Typography.bodySm,
+    color: Colors.tertiary,
     textAlign: 'center',
   },
   fieldGroup: { gap: 6 },

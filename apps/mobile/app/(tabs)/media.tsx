@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { BottomSheet, EmptyState, TopAppBar } from '../../components';
 import { Colors, Radius, Spacing, Typography } from '../../theme';
@@ -30,19 +31,30 @@ export default function MediaLibraryScreen() {
     setTimeout(() => setRefreshing(false), 800);
   }, []);
 
-  const handleSimulateUpload = () => {
+  const handlePickMedia = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Allow photo library access in your device settings to upload media.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.length) return;
+
     setUploading(true);
-    setTimeout(() => {
-      const newFile: MobileMediaFile = {
-        id: `m_${Date.now()}`,
-        fileName: `status_asset_${Math.floor(Math.random() * 100)}.png`,
-        fileUrl: `https://picsum.photos/400/400?random=${Math.floor(Math.random() * 100)}`,
-        fileSizeMb: 2.1,
-        mimeType: 'image/png',
-      };
-      setMediaList((prev) => [newFile, ...prev]);
-      setUploading(false);
-    }, 1200);
+    const asset = result.assets[0];
+    const newFile: MobileMediaFile = {
+      id: `m_${Date.now()}`,
+      fileName: asset.fileName ?? asset.uri.split('/').pop() ?? 'media_asset',
+      fileUrl: asset.uri,
+      fileSizeMb: asset.fileSize ? Number((asset.fileSize / (1024 * 1024)).toFixed(1)) : 0,
+      mimeType: asset.mimeType ?? (asset.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+    };
+    setMediaList((prev) => [newFile, ...prev]);
+    setUploading(false);
   };
 
   const handleDelete = (id: string) => {
@@ -62,7 +74,7 @@ export default function MediaLibraryScreen() {
     <View style={styles.screen}>
       <TopAppBar
         title="Media Library"
-        actions={[{ icon: 'cloud-upload', accessibilityLabel: 'Upload media', onPress: handleSimulateUpload }]}
+        actions={[{ icon: 'cloud-upload', accessibilityLabel: 'Upload media', onPress: handlePickMedia }]}
       />
 
       <View style={styles.controls}>

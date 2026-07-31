@@ -28,7 +28,14 @@
     },
     "scheme": "statusflow",
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "StatusFlow needs access to your photos so you can attach images and videos to a scheduled status.",
+          "videoPermission": "StatusFlow needs access to your videos so you can attach them to a scheduled status."
+        }
+      ]
     ],
     "extra": {
       "eas": {

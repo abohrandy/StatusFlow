@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { SegmentedControl, TopAppBar } from '../components';
 import { Colors, Radius, Spacing, Typography } from '../theme';
 
@@ -18,6 +19,29 @@ export default function ComposerScreen() {
   const [selectedColor, setSelectedColor] = useState(SWATCHES[0]);
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [mediaAsset, setMediaAsset] = useState<{ uri: string; fileName?: string } | null>(null);
+
+  const handleChangeStatusType = (next: StatusType) => {
+    setStatusType(next);
+    setMediaAsset(null);
+  };
+
+  const handlePickMedia = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Allow photo library access in your device settings to attach media.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: statusType === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.length) return;
+
+    const asset = result.assets[0];
+    setMediaAsset({ uri: asset.uri, fileName: asset.fileName ?? undefined });
+  };
 
   const handleSaveDraft = () => {
     setSaving(true);
@@ -33,11 +57,16 @@ export default function ComposerScreen() {
       Alert.alert('Add a caption', 'Please enter a status text caption.');
       return;
     }
+    if (statusType !== 'text' && !mediaAsset) {
+      Alert.alert('Add media', `Please select an ${statusType} from your device first.`);
+      return;
+    }
     setSaving(true);
     setTimeout(() => {
       setSaving(false);
       setSuccessMessage('Status scheduled successfully!');
       setCaption('');
+      setMediaAsset(null);
       setTimeout(() => setSuccessMessage(null), 2000);
     }, 800);
   };
@@ -60,11 +89,16 @@ export default function ComposerScreen() {
             { label: 'Text-only', value: 'text' },
           ]}
           value={statusType}
-          onChange={setStatusType}
+          onChange={handleChangeStatusType}
         />
 
         {/* Live WhatsApp-style preview */}
         <View style={[styles.previewFrame, { backgroundColor: statusType === 'text' ? selectedColor : Colors.onBackground }]}>
+          {statusType === 'image' && mediaAsset && (
+            <Image source={{ uri: mediaAsset.uri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+          )}
+          {statusType === 'image' && mediaAsset && <View style={styles.previewScrim} />}
+
           <View style={styles.previewHeader}>
             <Text style={styles.previewUser}>Your Status</Text>
             <Text style={styles.previewTime}>Just now</Text>
@@ -73,10 +107,17 @@ export default function ComposerScreen() {
           <View style={styles.previewBody}>
             {statusType === 'text' ? (
               <Text style={styles.previewText}>{caption || 'Type your status message...'}</Text>
-            ) : (
+            ) : statusType === 'video' && mediaAsset ? (
+              <View style={styles.mediaPlaceholder}>
+                <MaterialIcons name="videocam" size={36} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.mediaLabel} numberOfLines={1}>
+                  {mediaAsset.fileName ?? 'Video selected'}
+                </Text>
+              </View>
+            ) : statusType === 'image' && mediaAsset ? null : (
               <View style={styles.mediaPlaceholder}>
                 <MaterialIcons name={statusType === 'image' ? 'image' : 'videocam'} size={36} color="rgba(255,255,255,0.7)" />
-                <Text style={styles.mediaLabel}>Tap to select {statusType} from library</Text>
+                <Text style={styles.mediaLabel}>Tap below to select {statusType} from library</Text>
               </View>
             )}
           </View>
@@ -101,10 +142,12 @@ export default function ComposerScreen() {
         )}
 
         {statusType !== 'text' && (
-          <Pressable style={styles.uploadZone}>
-            <MaterialIcons name="upload-file" size={28} color={Colors.primary} />
-            <Text style={styles.uploadTitle}>Click or drag media</Text>
-            <Text style={styles.uploadSubtitle}>Supports JPG, PNG, MP4 up to 50MB</Text>
+          <Pressable style={styles.uploadZone} onPress={handlePickMedia}>
+            <MaterialIcons name={mediaAsset ? 'check-circle' : 'upload-file'} size={28} color={Colors.primary} />
+            <Text style={styles.uploadTitle}>{mediaAsset ? 'Media selected — tap to change' : 'Tap to select media'}</Text>
+            <Text style={styles.uploadSubtitle}>
+              {mediaAsset ? mediaAsset.fileName ?? 'Ready to schedule' : 'Choose a photo or video from your device'}
+            </Text>
           </Pressable>
         )}
 
@@ -164,6 +207,11 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     minHeight: 220,
     justifyContent: 'space-between',
+    overflow: 'hidden',
+  },
+  previewScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.25)',
   },
   previewHeader: {
     flexDirection: 'row',

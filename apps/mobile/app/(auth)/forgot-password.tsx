@@ -1,6 +1,8 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
+import { supabase } from '../../lib/supabase';
 import { Card } from '../../components';
 import { Colors, Radius, Spacing, Typography } from '../../theme';
 
@@ -8,9 +10,23 @@ export default function ForgotPasswordScreen() {
   const router = useRouter();
   const [email, setEmail] = React.useState('');
   const [sent, setSent] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
 
-  const handleReset = () => {
-    if (email) setSent(true);
+  const handleReset = async () => {
+    if (!email) return;
+    setLoading(true);
+    setError('');
+
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: Linking.createURL('auth/reset-password'),
+    });
+    if (resetError) {
+      setError(resetError.message);
+    } else {
+      setSent(true);
+    }
+    setLoading(false);
   };
 
   return (
@@ -18,6 +34,12 @@ export default function ForgotPasswordScreen() {
       <Card style={styles.card}>
         <Text style={styles.title}>Reset Password</Text>
         <Text style={styles.subtitle}>Enter your email to receive recovery instructions</Text>
+
+        {!!error && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
 
         {sent ? (
           <View style={styles.successBanner}>
@@ -38,8 +60,8 @@ export default function ForgotPasswordScreen() {
               />
             </View>
 
-            <Pressable style={styles.button} onPress={handleReset}>
-              <Text style={styles.buttonLabel}>Send Reset Link</Text>
+            <Pressable style={styles.button} onPress={handleReset} disabled={loading}>
+              {loading ? <ActivityIndicator color={Colors.onPrimary} /> : <Text style={styles.buttonLabel}>Send Reset Link</Text>}
             </Pressable>
           </>
         )}
@@ -65,6 +87,16 @@ const styles = StyleSheet.create({
     color: Colors.onSurfaceVariant,
     textAlign: 'center',
     marginBottom: Spacing.sm,
+  },
+  errorBanner: {
+    backgroundColor: Colors.errorContainer,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+  },
+  errorText: {
+    ...Typography.labelSm,
+    color: Colors.error,
+    textAlign: 'center',
   },
   successBanner: {
     backgroundColor: `${Colors.tertiary}1A`,

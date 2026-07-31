@@ -26,4 +26,17 @@ config.resolver.extraNodeModules = new Proxy({}, {
   }
 });
 
+// 4. @supabase/supabase-js dynamically imports @opentelemetry/api for optional
+// tracing; Metro (unlike Vite/webpack) tries to statically resolve it and
+// fails the bundle since it's not installed. Stub it out — see stubs/opentelemetry-api-stub.js.
+const originalResolveRequest = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === '@opentelemetry/api') {
+    return { filePath: path.resolve(projectRoot, 'stubs/opentelemetry-api-stub.js'), type: 'sourceFile' };
+  }
+  return originalResolveRequest
+    ? originalResolveRequest(context, moduleName, platform)
+    : context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = config;

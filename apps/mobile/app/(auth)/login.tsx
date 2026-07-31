@@ -1,8 +1,9 @@
 import React from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuthStore } from '../../store/useAuthStore';
-import { apiClient } from '../../lib/apiClient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { supabase } from '../../lib/supabase';
+import { signInWithGoogle } from '../../lib/googleAuth';
 import { Card } from '../../components';
 import { Colors, Radius, Spacing, Typography } from '../../theme';
 
@@ -11,8 +12,8 @@ export default function LoginScreen() {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [loading, setLoading] = React.useState(false);
+  const [googleLoading, setGoogleLoading] = React.useState(false);
   const [error, setError] = React.useState('');
-  const setUser = useAuthStore((state) => state.setUser);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -22,19 +23,22 @@ export default function LoginScreen() {
     setLoading(true);
     setError('');
 
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInError) setError(signInError.message);
+    // On success, the root layout's onAuthStateChange listener updates auth
+    // state and the auth gate redirects to the dashboard.
+    setLoading(false);
+  };
+
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    setError('');
     try {
-      // Authenticate against live backend API
-      const res = await apiClient.post('/auth/login', { email, password });
-      if (res.data?.user) {
-        setUser(res.data.user);
-      } else {
-        setUser({ id: 'user_1', email, role: email === 'abohrandy@gmail.com' ? 'ADMIN' : 'USER' });
-      }
+      await signInWithGoogle();
     } catch (err: any) {
-      // Fallback for staging simulation
-      setUser({ id: 'user_1', email, role: email === 'abohrandy@gmail.com' ? 'ADMIN' : 'USER' });
+      setError(err?.message ?? 'Google sign-in failed.');
     } finally {
-      setLoading(false);
+      setGoogleLoading(false);
     }
   };
 
@@ -79,8 +83,25 @@ export default function LoginScreen() {
           <Text style={styles.forgotLink}>Forgot password?</Text>
         </Pressable>
 
-        <Pressable style={styles.button} onPress={handleLogin} disabled={loading}>
+        <Pressable style={styles.button} onPress={handleLogin} disabled={loading || googleLoading}>
           {loading ? <ActivityIndicator color={Colors.onPrimary} /> : <Text style={styles.buttonLabel}>Sign In</Text>}
+        </Pressable>
+
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerLabel}>OR</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <Pressable style={styles.googleButton} onPress={handleGoogleLogin} disabled={loading || googleLoading}>
+          {googleLoading ? (
+            <ActivityIndicator color={Colors.onSurface} />
+          ) : (
+            <>
+              <MaterialCommunityIcons name="google" size={18} color={Colors.onSurface} />
+              <Text style={styles.googleButtonLabel}>Continue with Google</Text>
+            </>
+          )}
         </Pressable>
 
         <View style={styles.footerRow}>
@@ -148,6 +169,36 @@ const styles = StyleSheet.create({
   buttonLabel: {
     ...Typography.labelMd,
     color: Colors.onPrimary,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.outlineVariant,
+  },
+  dividerLabel: {
+    ...Typography.labelSm,
+    color: Colors.outline,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    paddingVertical: Spacing.md,
+  },
+  googleButtonLabel: {
+    ...Typography.labelMd,
+    color: Colors.onSurface,
   },
   footerRow: {
     flexDirection: 'row',
