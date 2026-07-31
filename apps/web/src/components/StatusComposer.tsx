@@ -1,16 +1,25 @@
 import React, { useState } from 'react';
+import { ApiError } from '@statusflow/api-client';
+import { apiClient } from '../lib/apiClient';
+import { FreeQuotaModal } from './modals/FreeQuotaModal';
 
 const EMOJIS = ['🔥', '🎉', '🚀', '😍', '✨', '💯', '🛒', '📅', '💬', '⭐'];
 const TEXT_BG_COLORS = ['#007a5a', '#128C7E', '#5c1b9b', '#9b1b30', '#1b439b', '#333333'];
 
-export const StatusComposer: React.FC = () => {
+interface StatusComposerProps {
+  onNavigateToBilling?: () => void;
+}
+
+export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBilling }) => {
   const [statusType, setStatusType] = useState<'TEXT' | 'IMAGE' | 'VIDEO'>('IMAGE');
   const [caption, setCaption] = useState('');
   const [bgColor, setBgColor] = useState('#128C7E');
   const [selectedMediaUrl, setSelectedMediaUrl] = useState<string>('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500');
   const [scheduledTime, setScheduledTime] = useState('');
   const [showMediaModal, setShowMediaModal] = useState(false);
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [saveStatusMessage, setSaveStatusMessage] = useState<string | null>(null);
+  const [checkingQuota, setCheckingQuota] = useState(false);
 
   const handleAddEmoji = (emoji: string) => {
     setCaption(prev => prev + emoji);
@@ -21,10 +30,23 @@ export const StatusComposer: React.FC = () => {
     setTimeout(() => setSaveStatusMessage(null), 3000);
   };
 
-  const handleScheduleSubmit = (e: React.FormEvent) => {
+  const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaveStatusMessage('Status scheduled successfully and added to queue!');
-    setTimeout(() => setSaveStatusMessage(null), 3000);
+    setCheckingQuota(true);
+    try {
+      await apiClient.checkScheduleAllowed();
+      setSaveStatusMessage('Status scheduled successfully and added to queue!');
+      setTimeout(() => setSaveStatusMessage(null), 3000);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        setShowQuotaModal(true);
+      } else {
+        setSaveStatusMessage('Could not schedule status right now. Please try again.');
+        setTimeout(() => setSaveStatusMessage(null), 3000);
+      }
+    } finally {
+      setCheckingQuota(false);
+    }
   };
 
   return (
@@ -161,9 +183,10 @@ export const StatusComposer: React.FC = () => {
           {/* Submit Action */}
           <button
             type="submit"
-            className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 font-semibold text-zinc-950 text-sm rounded-xl transition-all shadow-lg shadow-emerald-500/20"
+            disabled={checkingQuota}
+            className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 font-semibold text-zinc-950 text-sm rounded-xl transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-60"
           >
-            🚀 Schedule Status Post
+            {checkingQuota ? 'Checking your plan...' : '🚀 Schedule Status Post'}
           </button>
         </form>
 
@@ -240,6 +263,16 @@ export const StatusComposer: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {showQuotaModal && (
+        <FreeQuotaModal
+          onDismiss={() => setShowQuotaModal(false)}
+          onUpgrade={() => {
+            setShowQuotaModal(false);
+            onNavigateToBilling?.();
+          }}
+        />
       )}
     </div>
   );

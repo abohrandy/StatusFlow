@@ -2,6 +2,33 @@
 
 All notable changes to the StatusFlow platform will be documented in this file.
 
+## [Unreleased] - 2026-07-31
+### Added
+- `@statusflow/subscriptions`: reusable plan config, permission/billing/feature-gate
+  helpers, typed `SubscriptionError` for Free / Weekly Pro / Monthly Business.
+- Production Paystack billing: initialize, verify, signature-verified webhook handling
+  (`charge.success`, `subscription.create`, `subscription.disable`, `invoice.payment_failed`),
+  cancellation, and an hourly worker sweep as an expiration safety net.
+- Billing database schema: `plans`, `subscriptions`, `payments`, `invoices`, `webhook_logs`
+  (migration `002_billing_system.sql`, replacing the unused placeholder tables from
+  migration 001).
+- Referral program: codes, invite tracking, paid-conversion-gated rewards (1 referral = 1
+  week Weekly Pro, 3 referrals = 1 month Monthly Business), abuse prevention (migration
+  `003_referral_system.sql`, `docs/REFERRALS.md`).
+- Real Billing page (pricing cards, payment history, invoices), in-app upgrade/quota modals
+  (no browser alerts), and smart upgrade prompts (renewal-savings, expiry-warning) surfaced
+  both as modals and Notification Center entries.
+- Admin Panel Subscription Management: search, cancel, extend, manually activate, and view
+  payments/invoices/Paystack references/referral rewards/webhook logs, plus real billing
+  dashboard stats.
+- `apps/api/src/middleware/subscriptionGate.ts`: reusable premium-feature gate middleware
+  delegating entirely to `@statusflow/subscriptions` — no duplicated plan logic.
+### Fixed
+- Async route handlers (including the `requireAuth` middleware) could crash the entire API
+  process on a transient error, since Express 4 does not auto-catch rejected promises in
+  `async` handlers. Fixed with a shared `asyncHandler` wrapper applied to every route plus
+  a global error-handling middleware.
+
 ## [2.0.0] - 2026-07-28
 ### Added
 - Layer 15: Production Readiness & Release Candidate.

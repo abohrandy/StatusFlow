@@ -13,6 +13,15 @@ export const Register: React.FC<{ onNavigate: (page: string) => void }> = ({ onN
     setLoading(true);
     setError('');
     setMessage('');
+
+    // Captured here (rather than attributed immediately) because signUp may require
+    // email confirmation before a session exists — AuthContext attributes it once a
+    // session actually becomes available, whether that's now or after confirmation.
+    const refCode = new URLSearchParams(window.location.search).get('ref');
+    if (refCode) {
+      localStorage.setItem('sf_pending_referral_code', refCode.trim().toUpperCase());
+    }
+
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) setError(error.message);
     else setMessage('Registration successful! Please check your email inbox to verify your account.');

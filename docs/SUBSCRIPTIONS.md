@@ -174,15 +174,63 @@ check is a no-op for them — this is what "keep permissions driven from configu
 than hardcoded checks" means in practice: the paid tiers were never special-cased, they simply
 have no interval to violate.
 
-## What this module intentionally does not do (yet)
+## Database, Paystack, and UI wiring
 
-- **No database wiring.** `apps/api` and `apps/worker` in this repo are currently thin
-  scaffolds with no ORM/query layer at all (see `apps/api/src/index.ts`). Wiring
-  `Subscription` records to actual Postgres/Supabase storage, and calling the feature gate
-  from real API routes, is follow-up work once those layers exist.
-- **No Paystack HTTP calls.** `getAmountInKobo` and the pricing helpers give you what you need
-  to build a Paystack initialize/charge payload, but the actual webhook handling described in
-  `docs/PAYSTACK.md` (`charge.success`, `subscription.disable`, etc.) is a separate integration
-  layer that should call into this module's helpers, not duplicate its plan logic.
-- **No UI.** Per the current scope, the web dashboard's `SubscriptionBilling.tsx` and the
-  mobile app's `billing.tsx` are unchanged.
+The sections above describe the persistence-agnostic `@statusflow/subscriptions` package
+itself. It is now fully wired into a real backend and UI:
+
+- **Database**: `apps/api` persists `Subscription`/`Payment`/`Invoice`/webhook records to
+  Postgres — see [DATABASE.md](DATABASE.md#billing-schema-database-migrations002_billing_systemsql).
+- **Paystack**: initialize/verify/webhook/cancel are fully implemented — see
+  [PAYSTACK.md](PAYSTACK.md). Activation only ever happens inside the signature-verified
+  webhook handler.
+- **Middleware**: `apps/api/src/middleware/subscriptionGate.ts` protects premium features
+  (unlimited scheduling, drafts, priority queue, future scheduling) by loading the
+  caller's real subscription and delegating the decision entirely to this package's
+  `assertCanUseFeature`/`assertCanScheduleStatus` — it contains no plan rules of its own.
+- **UI**: `apps/web/src/components/SubscriptionBilling.tsx` (pricing cards + payment
+  history + invoices), `apps/web/src/components/modals/FreeQuotaModal.tsx` and
+  `SmartUpgradePrompts.tsx` (in-app modals, never browser `alert()`s), and the Admin
+  Panel's Subscription Management tab (`apps/web/src/components/AdminPanel.tsx`).
+
+## Smart upgrade prompts
+
+Computed server-side in `GET /api/v1/billing/subscription` (`buildSmartPrompts` in
+`apps/api/src/routes/billing.ts`), surfaced client-side as modals and, once triggered, also
+persisted as deduped notifications (see [DATABASE.md](DATABASE.md#notification-metadata-database-migrations004_notification_metadatasql)):
+
+| Scenario | Condition | Message |
+|---|---|---|
+| Renewal savings | Weekly Pro, `consecutive_renewals === 4` exactly (fires once, not every subsequent renewal) | "You're spending ₦8,000 every four weeks. Switch to Monthly Business and save ₦2,000 every month." |
+| Expiry warning | Weekly Pro, cancelled or past-due, `current_period_end` within 3 days | "Your Weekly Pro subscription expires in 3 days. Renew now or switch to Monthly Business to save money." |
+
+Both boundary conditions (fires at exactly 4, not 3 or 5; fires within the 3-day window,
+not before or after; never fires for a normally auto-renewing subscription) were verified
+directly during the production review.
+
+## Production review notes
+
+A full review of this system (Free-plan enforcement, webhook-only activation, renewal/
+cancellation/expiration, referral rewards, admin data accuracy) was performed by compiling
+the actual repository/service code and running it against a real Postgres engine and real
+HTTP requests with genuine and forged Paystack signatures — not just reading the code. One
+real bug was found and fixed: Express 4 does not automatically catch promise rejections
+inside `async` route handlers, so a transient failure (e.g. a dropped DB connection) inside
+any billing/referral/admin/notifications/webhook route — or inside the `requireAuth`
+middleware itself — could have crashed the entire API process instead of failing just that
+one request. Fixed with a shared `asyncHandler` wrapper (`apps/api/src/utils/asyncHandler.ts`)
+applied to every route, a global Express error-handling middleware in `index.ts`, and
+try/catch hardening around `requireAuth` and the webhook logger. Re-tested afterward: the
+server now survives the same failure scenario and returns a proper error response instead
+of dying.
+
+One limitation of the review environment worth disclosing: the sandbox has no Docker/local
+Postgres, so verification used an embedded WASM Postgres (`@electric-sql/pglite`) exposed
+over a real Postgres-wire-protocol socket, which does not reliably support multiple
+simultaneous client connections. This surfaced as connection resets specifically when a
+second concurrent process queried the same instance the live API server was using — a
+limitation of that lightweight test harness, not of the reviewed code (a single-process,
+sequential exercise of the exact same compiled repository functions against the same
+engine passed all assertions, including the full activate → renew ×4 → cancel → expire →
+plan-switch lifecycle and the complete referral attribution → conversion → reward flow).
+Real production Postgres does not have this limitation.

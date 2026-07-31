@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { apiClient } from './lib/apiClient';
+import { RenewalSavingsModal, ExpiryWarningModal } from './components/modals/SmartUpgradePrompts';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { ForgotPassword } from './pages/ForgotPassword';
@@ -12,13 +14,29 @@ import { ScheduledQueue } from './components/ScheduledQueue';
 import { HistoryAndCalendar } from './components/HistoryAndCalendar';
 import { NotificationCenter } from './components/NotificationCenter';
 import { SubscriptionBilling } from './components/SubscriptionBilling';
+import { ReferralDashboard } from './components/ReferralDashboard';
 import { UserSettings } from './components/UserSettings';
 import { AdminPanel } from './components/AdminPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 function DashboardShell() {
   const { user, isAdmin, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'queue' | 'composer' | 'calendar' | 'notifications' | 'pairing' | 'media' | 'billing' | 'settings' | 'admin'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'queue' | 'composer' | 'calendar' | 'notifications' | 'pairing' | 'media' | 'billing' | 'referrals' | 'settings' | 'admin'>('dashboard');
+  const [smartPrompt, setSmartPrompt] = useState<'renewalSavings' | 'expiryWarning' | null>(null);
+
+  // Checked once per session on load — these are proactive nudges, not reactive to a
+  // specific user action, so they can surface regardless of which tab is active.
+  useEffect(() => {
+    apiClient
+      .getSubscription()
+      .then(({ smartPrompts }) => {
+        if (smartPrompts.renewalSavings) setSmartPrompt('renewalSavings');
+        else if (smartPrompts.expiryWarning) setSmartPrompt('expiryWarning');
+      })
+      .catch(() => {
+        // Silent — smart prompts are a nice-to-have, not worth surfacing an error banner for.
+      });
+  }, []);
 
   return (
     <div className="flex h-screen bg-zinc-950 text-zinc-100">
@@ -98,6 +116,14 @@ function DashboardShell() {
               Subscription & Billing
             </button>
             <button
+              onClick={() => setActiveTab('referrals')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'referrals' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
+              }`}
+            >
+              Refer & Earn
+            </button>
+            <button
               onClick={() => setActiveTab('settings')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'settings' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
@@ -160,17 +186,37 @@ function DashboardShell() {
         {/* Dynamic View Shell */}
         <div className="p-8 max-w-6xl w-full mx-auto space-y-6">
           {activeTab === 'dashboard' && <DashboardOverview />}
-          {activeTab === 'composer' && <StatusComposer />}
+          {activeTab === 'composer' && <StatusComposer onNavigateToBilling={() => setActiveTab('billing')} />}
           {activeTab === 'calendar' && <HistoryAndCalendar />}
           {activeTab === 'notifications' && <NotificationCenter />}
           {activeTab === 'queue' && <ScheduledQueue />}
           {activeTab === 'pairing' && <WhatsAppPairing />}
           {activeTab === 'media' && <MediaLibrary />}
           {activeTab === 'billing' && <SubscriptionBilling />}
+          {activeTab === 'referrals' && <ReferralDashboard />}
           {activeTab === 'settings' && <UserSettings />}
           {activeTab === 'admin' && isAdmin && <AdminPanel />}
         </div>
       </main>
+
+      {smartPrompt === 'renewalSavings' && (
+        <RenewalSavingsModal
+          onDismiss={() => setSmartPrompt(null)}
+          onPrimary={() => {
+            setSmartPrompt(null);
+            setActiveTab('billing');
+          }}
+        />
+      )}
+      {smartPrompt === 'expiryWarning' && (
+        <ExpiryWarningModal
+          onDismiss={() => setSmartPrompt(null)}
+          onPrimary={() => {
+            setSmartPrompt(null);
+            setActiveTab('billing');
+          }}
+        />
+      )}
     </div>
   );
 }

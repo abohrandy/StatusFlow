@@ -41,6 +41,8 @@ export async function initializeTransaction(params: {
   amountKobo: number;
   reference: string;
   callbackUrl: string;
+  /** Paystack recurring-billing Plan code — attaches this transaction to a subscription. */
+  planCode?: string;
   metadata?: Record<string, unknown>;
 }): Promise<InitializeTransactionResult> {
   const data = await paystackRequest<{ authorization_url: string; access_code: string; reference: string }>(
@@ -52,6 +54,7 @@ export async function initializeTransaction(params: {
         amount: params.amountKobo,
         reference: params.reference,
         callback_url: params.callbackUrl,
+        plan: params.planCode,
         metadata: params.metadata,
       }),
     },

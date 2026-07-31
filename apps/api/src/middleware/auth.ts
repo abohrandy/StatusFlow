@@ -31,21 +31,25 @@ declare global {
  * keeps them in sync). Attaches `req.user` on success.
  */
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const header = req.headers.authorization;
-  const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
-
-  if (!token) {
-    return res.status(401).json({ error: 'Missing Authorization bearer token.' });
-  }
-
-  const { data, error } = await supabaseAuthClient.auth.getUser(token);
-  if (error || !data.user?.email) {
-    return res.status(401).json({ error: 'Invalid or expired session.' });
-  }
-
-  const { id, email } = data.user;
-
+  // Wrapped end-to-end: this runs as Express middleware (`.use(requireAuth)`), not a
+  // route handler, so it's never passed through the asyncHandler wrapper — a rejected
+  // promise here (e.g. Supabase's SDK throwing on a network error, not just returning
+  // `{error}`) would otherwise crash the whole process rather than fail one request.
   try {
+    const header = req.headers.authorization;
+    const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Missing Authorization bearer token.' });
+    }
+
+    const { data, error } = await supabaseAuthClient.auth.getUser(token);
+    if (error || !data.user?.email) {
+      return res.status(401).json({ error: 'Invalid or expired session.' });
+    }
+
+    const { id, email } = data.user;
+
     const result = await pool.query<{ role: 'USER' | 'ADMIN' }>(
       `INSERT INTO users (id, email)
        VALUES ($1, $2)
@@ -57,7 +61,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     req.user = { id, email, role: result.rows[0].role };
     next();
   } catch (err: any) {
-    console.error('[Auth] Failed to provision/load user row:', err.message);
+    console.error('[Auth] requireAuth failed:', err.message);
     res.status(500).json({ error: 'Failed to resolve authenticated user.' });
   }
 }

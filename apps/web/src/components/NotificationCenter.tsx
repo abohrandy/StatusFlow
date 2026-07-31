@@ -1,41 +1,81 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { apiClient } from '../lib/apiClient';
 
 export interface NotificationItem {
   id: string;
   title: string;
   message: string;
-  type: 'SUCCESS' | 'FAILURE' | 'DISCONNECT' | 'SUBSCRIPTION';
+  type: string;
   isRead: boolean;
   createdAt: string;
 }
 
-const INITIAL_NOTIFICATIONS: NotificationItem[] = [
-  { id: 'notif_1', title: 'WhatsApp Socket Disconnected', message: 'Session +2348123456789 lost connection. Auto-reconnecting...', type: 'DISCONNECT', isRead: false, createdAt: '10 mins ago' },
-  { id: 'notif_2', title: 'Status Broadcast Published', message: 'Flash Sale Alert! status delivered to 142 contacts.', type: 'SUCCESS', isRead: false, createdAt: '1 hour ago' },
-  { id: 'notif_3', title: 'Subscription Auto-Renewing', message: 'Your Pro Plan subscription ($15.00) renews on Aug 15 via Paystack.', type: 'SUBSCRIPTION', isRead: true, createdAt: '1 day ago' },
-  { id: 'notif_4', title: 'Status Publish Failed', message: 'Product Video Status failed due to temporary network error. Retrying...', type: 'FAILURE', isRead: true, createdAt: '2 days ago' }
-];
+function getIcon(type: string): string {
+  switch (type) {
+    case 'RENEWAL_SAVINGS':
+      return '💰';
+    case 'EXPIRY_WARNING':
+      return '⏳';
+    case 'DISCONNECT':
+      return '⚠️';
+    case 'SUCCESS':
+      return '✅';
+    case 'FAILURE':
+      return '❌';
+    default:
+      return '🔔';
+  }
+}
+
+function formatRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
 
 export const NotificationCenter: React.FC = () => {
-  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-
-  const handleMarkAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-  };
-
-  const handleToggleRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: !n.isRead } : n));
-  };
-
-  const getIcon = (type: NotificationItem['type']) => {
-    switch (type) {
-      case 'DISCONNECT': return '⚠️';
-      case 'SUCCESS': return '✅';
-      case 'FAILURE': return '❌';
-      case 'SUBSCRIPTION': return '💳';
+  async function load() {
+    setLoading(true);
+    try {
+      const { notifications: rows } = await apiClient.getNotifications();
+      setNotifications(
+        rows.map((r) => ({
+          id: r.id,
+          title: r.title,
+          message: r.message,
+          type: r.type,
+          isRead: r.is_read,
+          createdAt: r.created_at,
+        })),
+      );
+    } finally {
+      setLoading(false);
     }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  const handleMarkAllAsRead = async () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    await apiClient.markAllNotificationsRead();
+  };
+
+  const handleToggleRead = async (id: string, isRead: boolean) => {
+    if (isRead) return; // no "mark unread" endpoint — read state only moves forward
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+    await apiClient.markNotificationRead(id);
   };
 
   return (
@@ -51,7 +91,7 @@ export const NotificationCenter: React.FC = () => {
               </span>
             )}
           </div>
-          <p className="text-sm text-zinc-400 mt-1">Real-time alerts for socket status, status broadcasts, and Paystack subscriptions.</p>
+          <p className="text-sm text-zinc-400 mt-1">Billing and subscription alerts land here.</p>
         </div>
 
         {unreadCount > 0 && (
@@ -66,39 +106,44 @@ export const NotificationCenter: React.FC = () => {
 
       {/* Notifications History List */}
       <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
-        <h3 className="font-semibold text-base text-white mb-2">Notification History Logs</h3>
+        <h3 className="font-semibold text-base text-white mb-2">Notification History</h3>
 
-        <div className="space-y-3">
-          {notifications.map((item) => (
-            <div 
-              key={item.id} 
-              className={`p-4 rounded-xl border flex items-start justify-between gap-4 transition-all ${
-                !item.isRead ? 'bg-zinc-950/80 border-emerald-500/30' : 'bg-zinc-950/40 border-zinc-800/80 opacity-75'
-              }`}
-            >
-              <div className="flex items-start gap-4">
-                <span className="text-xl p-2 rounded-xl bg-zinc-900 border border-zinc-800">{getIcon(item.type)}</span>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm text-white">{item.title}</span>
-                    {!item.isRead && (
-                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    )}
-                  </div>
-                  <p className="text-xs text-zinc-400 mt-1 leading-relaxed">{item.message}</p>
-                  <span className="text-[10px] text-zinc-500 mt-2 block">{item.createdAt}</span>
-                </div>
-              </div>
-
-              <button
-                onClick={() => handleToggleRead(item.id)}
-                className="text-xs text-zinc-400 hover:text-white font-medium"
+        {loading ? (
+          <div className="py-8 text-center text-xs text-zinc-500">Loading...</div>
+        ) : notifications.length === 0 ? (
+          <div className="py-8 text-center text-xs text-zinc-500 border border-dashed border-zinc-800 rounded-xl">
+            No notifications yet.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {notifications.map((item) => (
+              <div
+                key={item.id}
+                className={`p-4 rounded-xl border flex items-start justify-between gap-4 transition-all ${
+                  !item.isRead ? 'bg-zinc-950/80 border-emerald-500/30' : 'bg-zinc-950/40 border-zinc-800/80 opacity-75'
+                }`}
               >
-                {item.isRead ? 'Mark Unread' : 'Mark Read'}
-              </button>
-            </div>
-          ))}
-        </div>
+                <div className="flex items-start gap-4">
+                  <span className="text-xl p-2 rounded-xl bg-zinc-900 border border-zinc-800">{getIcon(item.type)}</span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm text-white">{item.title}</span>
+                      {!item.isRead && <span className="w-2 h-2 rounded-full bg-emerald-500"></span>}
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-1 leading-relaxed">{item.message}</p>
+                    <span className="text-[10px] text-zinc-500 mt-2 block">{formatRelativeTime(item.createdAt)}</span>
+                  </div>
+                </div>
+
+                {!item.isRead && (
+                  <button onClick={() => handleToggleRead(item.id, item.isRead)} className="text-xs text-zinc-400 hover:text-white font-medium">
+                    Mark Read
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
