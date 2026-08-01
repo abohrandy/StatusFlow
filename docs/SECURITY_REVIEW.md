@@ -14,7 +14,7 @@ This document details the security verification, encryption protocols, and vulne
 | **Rate Limiting** | Express Middleware | IP-based rate limiting middleware (`rateLimiter.ts`) enforcing 100 requests per 15-minute window to block brute-force attacks. | ✅ PASSED |
 | **File Upload Validation** | MIME & Size Guardrails | Media Library enforces strict MIME type filtering (`image/jpeg`, `image/png`, `video/mp4`) and maximum 50MB file size limits. | ✅ PASSED |
 | **SQL Injection Protection** | Parameterized Queries | All PostgreSQL database queries use parameterized SQL prepared statements via Prisma / Supabase SDKs. | ✅ PASSED |
-| **XSS & CSRF Protection** | Sanitization & CORS | React DOM auto-escaping prevents script injection. Strict CORS headers restrict allowed origins (`https://statusflow-production.up.railway.app`). | ✅ PASSED |
+| **XSS & CSRF Protection** | Sanitization & CORS | React DOM auto-escaping prevents script injection. Strict CORS headers restrict allowed origins (`https://statusflow.reelas.com.ng`). | ✅ PASSED |
 | **Admin Route Protection** | RBAC Authorization | Admin Panel routes and endpoints are restricted to `abohrandy@gmail.com` with `ADMIN` role checks. | ✅ PASSED |
 
 ---

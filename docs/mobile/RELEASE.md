@@ -42,4 +42,4 @@ eas build --platform android --profile production
 - **Short Description**: Automate and schedule WhatsApp status broadcasts effortlessly.
 - **Full Description**: StatusFlow is a WhatsApp Status scheduling platform allowing businesses and marketers to create, preview, schedule, and track image, video, and text status broadcasts.
 - **Category**: Productivity / Business
-- **Privacy Policy**: `https://statusflow-production.up.railway.app/privacy`
+- **Privacy Policy**: `https://statusflow.reelas.com.ng/privacy`

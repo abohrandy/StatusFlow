@@ -1,6 +1,6 @@
 # StatusFlow - Custom Domain & Branding Guide
 
-How to display **StatusFlow** (or `statusflow.app` / `statusflow-production.up.railway.app`) instead of `uqritaeteygddlroulov.supabase.co` on the Google Sign-In prompt.
+How to display **StatusFlow** (or `statusflow.reelas.com.ng`) instead of `uqritaeteygddlroulov.supabase.co` on the Google Sign-In prompt.
 
 ---
 
@@ -24,4 +24,4 @@ In Supabase Dashboard -> **Project Settings** -> **Custom Domains**:
 ## 3. Option B: Custom Domain in Google Cloud Console
 In Google Cloud Console -> **Branding**:
 - Upload your **StatusFlow Logo**.
-- Set **App logo** and **App Domain** (`https://statusflow-production.up.railway.app`).
+- Set **App logo** and **App Domain** (`https://statusflow.reelas.com.ng`).
