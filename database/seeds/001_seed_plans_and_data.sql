@@ -8,8 +8,8 @@
 INSERT INTO plans (slug, name, price, currency, billing_cycle, sort_order, paystack_plan_code)
 VALUES
     ('free', 'Free', 0.00, 'NGN', 'lifetime', 0, NULL),
-    ('weekly-pro', 'Weekly Pro', 2000.00, 'NGN', 'weekly', 10, 'PLN_dwntmk7o0ogwhml'),
-    ('monthly-business', 'Monthly Business', 6000.00, 'NGN', 'monthly', 20, 'PLN_xs5tn28x1wgfg6v')
+    ('weekly-pro', 'Weekly Pro', 2000.00, 'NGN', 'weekly', 10, 'PLN_589g914nzf2c0qf'),
+    ('monthly-business', 'Monthly Business', 6000.00, 'NGN', 'monthly', 20, 'PLN_ueuaywwk7vqxvc8')
 ON CONFLICT (slug) DO UPDATE
 SET name = EXCLUDED.name,
     price = EXCLUDED.price,
