@@ -1,13 +1,20 @@
 # Docker Multi-Stage Build for StatusFlow API + Web Dashboard
-FROM node:20-alpine AS base
+# Node 22+ is required — @supabase/supabase-js (a transitive dep of apps/api's auth middleware)
+# needs the native `WebSocket` global that only Node 22+ provides; on Node 20 it throws
+# "Node.js detected but native WebSocket not found" the instant the client is constructed.
+FROM node:22-alpine AS base
 WORKDIR /app
 RUN npm install -g pnpm typescript
 
-COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/ ./packages/
 COPY apps/ ./apps/
 
-RUN pnpm install --no-frozen-lockfile
+# --frozen-lockfile: install exactly what's in pnpm-lock.yaml. --no-frozen-lockfile silently
+# re-resolves every dependency within its semver range on every build, which is how this
+# service drifted onto a @supabase/supabase-js version requiring Node 22 without any change
+# to this repo's own code — nothing here should change on a rebuild unless the lockfile does.
+RUN pnpm install --frozen-lockfile
 # @statusflow/subscriptions' package.json "types" points at its compiled dist/index.d.ts (see
 # its tsconfig.json) since apps/api requires it at runtime via plain `node`, with no ts-node/
 # register hook to transpile TypeScript on the fly the way `pnpm dev` does. This must run
