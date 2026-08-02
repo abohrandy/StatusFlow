@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import axios from 'axios';
 import { Card, SegmentedControl, TopAppBar } from '../components';
 import { Colors, Radius, Spacing, Typography } from '../theme';
+import { apiClient } from '../lib/apiClient';
 
 type PairingMethod = 'code' | 'qr';
 
@@ -18,34 +20,60 @@ export default function PairingScreen() {
   const [method, setMethod] = useState<PairingMethod>('code');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [pollingActive, setPollingActive] = useState(false);
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | undefined;
-    if (pollingActive && !isConnected) {
-      interval = setInterval(() => {
-        // Polling simulation checking connection status
-      }, 3000);
-    }
-    return () => clearInterval(interval);
-  }, [pollingActive, isConnected]);
+    apiClient
+      .get('/whatsapp/status')
+      .then(({ data }) => {
+        setIsConnected(data.connected);
+        if (data.phoneNumber) setPhoneNumber(data.phoneNumber);
+      })
+      .catch(() => {
+        // No session yet, or a transient error — either way, default to "not connected".
+      });
+  }, []);
 
-  const handleRequestCode = () => {
+  const handleRequestCode = async () => {
     if (!phoneNumber) return;
     setLoading(true);
-    setTimeout(() => {
-      setPairingCode('87B9-4K21');
+    try {
+      const { data } = await apiClient.post('/whatsapp/pairing/request', { phoneNumber });
+      setSessionId(data.sessionId);
+      setPairingCode(data.pairingCode);
+    } catch (err) {
+      const message = axios.isAxiosError(err) ? err.response?.data?.error : null;
+      Alert.alert('Could not connect', message ?? 'Please try again.');
+    } finally {
       setLoading(false);
-      setPollingActive(true);
-    }, 600);
+    }
   };
 
-  const handleSimulatePair = () => {
+  // Only the pairing-code path actually collects a phone number to check/persist — the QR
+  // flow (below) never has one to give the backend, so it stays a local-only simulation.
+  const handleConfirmPairingCode = async () => {
+    if (!sessionId) return;
+    try {
+      await apiClient.post('/whatsapp/pairing/confirm', { sessionId });
+      setIsConnected(true);
+      setPairingCode(null);
+    } catch {
+      Alert.alert('Could not confirm', 'Please try again.');
+    }
+  };
+
+  const handleSimulateQrScan = () => {
     setIsConnected(true);
-    setPairingCode(null);
-    setPollingActive(false);
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      await apiClient.post('/whatsapp/disconnect');
+    } finally {
+      setIsConnected(false);
+    }
   };
 
   return (
@@ -73,7 +101,7 @@ export default function PairingScreen() {
                   <MaterialIcons name="sync" size={16} color={Colors.onPrimary} />
                   <Text style={styles.reconnectLabel}>Reconnect</Text>
                 </Pressable>
-                <Pressable style={styles.disconnectButton} onPress={() => setIsConnected(false)}>
+                <Pressable style={styles.disconnectButton} onPress={handleDisconnect}>
                   <MaterialIcons name="logout" size={16} color={Colors.error} />
                   <Text style={styles.disconnectLabel}>Disconnect</Text>
                 </Pressable>
@@ -157,7 +185,7 @@ export default function PairingScreen() {
                     <View style={styles.codeBox}>
                       <Text style={styles.codeText}>{pairingCode}</Text>
                     </View>
-                    <Pressable style={styles.primaryButton} onPress={handleSimulatePair}>
+                    <Pressable style={styles.primaryButton} onPress={handleConfirmPairingCode}>
                       <Text style={styles.primaryButtonLabel}>I've entered the code</Text>
                     </Pressable>
                   </View>
@@ -173,7 +201,7 @@ export default function PairingScreen() {
                       style={styles.qrImage}
                     />
                   </View>
-                  <Pressable style={styles.primaryButton} onPress={handleSimulatePair}>
+                  <Pressable style={styles.primaryButton} onPress={handleSimulateQrScan}>
                     <Text style={styles.primaryButtonLabel}>I've scanned the code</Text>
                   </Pressable>
                 </View>

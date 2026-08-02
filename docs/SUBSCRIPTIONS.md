@@ -158,6 +158,8 @@ upgrade suggestion combined), and `toJSON()` for returning directly as an API er
 | `WHATSAPP_ACCOUNT_LIMIT_REACHED` | "Your plan allows up to 1 connected WhatsApp account. Upgrade to Weekly Pro to connect more WhatsApp accounts." |
 | `MEDIA_TYPE_NOT_ALLOWED` | "Your plan does not support video statuses. Upgrade to &lt;plan&gt; to post video statuses." |
 | `FEATURE_NOT_AVAILABLE` | "Drafts is not available on your plan. Upgrade to Weekly Pro to unlock drafts." |
+| `TRIAL_EXPIRED` | "Your 7-day free trial has ended. Upgrade to Weekly Pro to keep scheduling WhatsApp statuses." |
+| `PHONE_NUMBER_ALREADY_USED_FOR_TRIAL` | "This phone number has already been used for a free trial. Upgrade to Weekly Pro to connect it anyway." |
 
 The upgrade suggestion is never hardcoded to a specific plan name — it's computed by scanning
 `listUpgradeOptions(planSlug)` (plans with a higher `order`) for the cheapest one that would
@@ -173,6 +175,23 @@ quota resets. Weekly Pro and Monthly Business have `scheduledStatusIntervalDays:
 check is a no-op for them — this is what "keep permissions driven from configuration rather
 than hardcoded checks" means in practice: the paid tiers were never special-cased, they simply
 have no interval to violate.
+
+## Free trial: 7-day window, one trial per phone number
+
+The Free plan is a genuine 7-day trial, not a permanent tier — `billing.ts` exports
+`FREE_TRIAL_DAYS = 7`, `freeTrialEndsAt(accountCreatedAt)`, and `isFreeTrialExpired(...)`.
+`canScheduleStatus` checks this before the interval quota above: once 7 days have passed
+since the account (`users.created_at`) was created, scheduling is blocked entirely with
+`TRIAL_EXPIRED` — the "1 status every 7 days" allowance no longer applies once the trial
+itself is over, not just the current week's post.
+
+Separately, `apps/api/src/routes/whatsapp.ts` enforces that a WhatsApp phone number can only
+ever activate one Free trial, even across different accounts/emails. `trial_phone_numbers`
+(migration `005_trial_abuse_prevention.sql`) is a standalone, append-only ledger — not derived
+from `whatsapp_sessions`, which can be deleted/disconnected — keyed on `phone_number` alone so
+the block survives account deletion (`user_id` is `SET NULL`, never cascade-deleted). Only
+Free-plan connections are checked; a paying customer connecting a number some past free-trial
+account also used isn't the abuse this exists to prevent.
 
 ## Database, Paystack, and UI wiring
 

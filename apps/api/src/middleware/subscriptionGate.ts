@@ -7,7 +7,7 @@ import {
   type FeatureKey,
   type PlanSlug,
 } from '@statusflow/subscriptions';
-import { getActiveSubscription } from '../repositories/billingRepository';
+import { getActiveSubscription, getUserCreatedAt } from '../repositories/billingRepository';
 import { pool } from '../db';
 
 /**
@@ -58,11 +58,14 @@ export const requireFutureScheduling = requireFeature('scheduleMonthsAhead');
 export async function requireScheduleQuota(req: Request, res: Response, next: NextFunction) {
   try {
     const planSlug = await loadPlanSlug(req.user!.id);
-    const result = await pool.query<{ last: string | null }>(
-      `SELECT MAX(scheduled_at) AS last FROM status_posts WHERE user_id = $1 AND status <> 'FAILED'`,
-      [req.user!.id],
-    );
-    assertCanScheduleStatus(planSlug, { lastScheduledStatusAt: result.rows[0]?.last ?? null });
+    const [result, accountCreatedAt] = await Promise.all([
+      pool.query<{ last: string | null }>(
+        `SELECT MAX(scheduled_at) AS last FROM status_posts WHERE user_id = $1 AND status <> 'FAILED'`,
+        [req.user!.id],
+      ),
+      getUserCreatedAt(req.user!.id),
+    ]);
+    assertCanScheduleStatus(planSlug, { lastScheduledStatusAt: result.rows[0]?.last ?? null, accountCreatedAt });
     next();
   } catch (err) {
     handleSubscriptionError(res, err);

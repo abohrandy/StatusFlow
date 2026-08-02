@@ -1,4 +1,4 @@
-import { listUpgradeOptions } from './billing';
+import { isFreeTrialExpired, listUpgradeOptions } from './billing';
 import { buildUpgradeSuggestion, SubscriptionError, type SubscriptionErrorCode, type UpgradeSuggestion } from './errors';
 import {
   canConnectAnotherWhatsAppAccount,
@@ -66,6 +66,20 @@ export function canScheduleStatus(
   usage: SubscriptionUsage = {},
   now: Date = new Date(),
 ): FeatureGateResult {
+  // The trial window is a harder stop than the interval quota below: once it's lapsed,
+  // no further posts are allowed at all, not just "one every 7 days" going forward.
+  if (planSlug === 'free' && usage.accountCreatedAt && isFreeTrialExpired(new Date(usage.accountCreatedAt), now)) {
+    const upgradeTarget = findUpgradeFor(planSlug, () => true);
+    return {
+      allowed: false,
+      code: 'TRIAL_EXPIRED',
+      reason: 'Your 7-day free trial has ended.',
+      upgrade: upgradeTarget
+        ? buildUpgradeSuggestion(upgradeTarget.slug as PlanSlug, upgradeTarget.name, 'keep scheduling WhatsApp statuses')
+        : undefined,
+    };
+  }
+
   const intervalDays = getScheduledStatusIntervalDays(planSlug);
   if (intervalDays === null) return allow();
 

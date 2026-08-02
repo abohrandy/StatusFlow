@@ -82,6 +82,12 @@ export async function getUserIdByEmail(email: string): Promise<string | null> {
   return result.rows[0]?.id ?? null;
 }
 
+/** When the account was created — used to evaluate the Free plan's 7-day trial window. */
+export async function getUserCreatedAt(userId: string): Promise<Date | null> {
+  const result = await pool.query<{ created_at: string }>('SELECT created_at FROM users WHERE id = $1', [userId]);
+  return result.rows[0] ? new Date(result.rows[0].created_at) : null;
+}
+
 export async function getActiveSubscription(userId: string): Promise<SubscriptionRow | null> {
   const result = await pool.query<SubscriptionRow>(
     `SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1`,

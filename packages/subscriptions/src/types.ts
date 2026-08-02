@@ -30,6 +30,8 @@ export interface SubscriptionUsage {
   lastScheduledStatusAt?: string | Date | null;
   /** Number of WhatsApp accounts currently connected. */
   connectedWhatsAppAccounts?: number;
+  /** ISO timestamp (or Date) the account was created — used to evaluate the Free plan's 7-day trial window. */
+  accountCreatedAt?: string | Date | null;
 }
 
 /**

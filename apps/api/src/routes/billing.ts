@@ -11,6 +11,7 @@ import {
   getPaymentByReference,
   getPaymentHistory,
   getSubscriptionHistory,
+  getUserCreatedAt,
   markPaymentStatus,
   requestCancellation,
 } from '../repositories/billingRepository';
@@ -201,13 +202,16 @@ billingRouter.post('/schedule-check', asyncHandler(async (req, res) => {
   const sub = await getActiveSubscription(req.user!.id);
   const planSlug: PlanSlug = sub?.plan_slug ?? 'free';
 
-  const result = await pool.query<{ last: string | null }>(
-    `SELECT MAX(scheduled_at) AS last FROM status_posts WHERE user_id = $1 AND status <> 'FAILED'`,
-    [req.user!.id],
-  );
+  const [result, accountCreatedAt] = await Promise.all([
+    pool.query<{ last: string | null }>(
+      `SELECT MAX(scheduled_at) AS last FROM status_posts WHERE user_id = $1 AND status <> 'FAILED'`,
+      [req.user!.id],
+    ),
+    getUserCreatedAt(req.user!.id),
+  ]);
 
   try {
-    assertCanScheduleStatus(planSlug, { lastScheduledStatusAt: result.rows[0]?.last ?? null });
+    assertCanScheduleStatus(planSlug, { lastScheduledStatusAt: result.rows[0]?.last ?? null, accountCreatedAt });
     res.json({ allowed: true });
   } catch (err) {
     if (err instanceof SubscriptionError) {

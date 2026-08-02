@@ -23,6 +23,25 @@ export function isPaidPlan(planSlug: PlanSlug): boolean {
   return !isFreePlan(planSlug);
 }
 
+/** How long the Free plan's trial lasts, counted from account creation. */
+export const FREE_TRIAL_DAYS = 7;
+
+/** When a Free-plan trial ends, given when the account was created. */
+export function freeTrialEndsAt(accountCreatedAt: Date): Date {
+  const end = new Date(accountCreatedAt);
+  end.setDate(end.getDate() + FREE_TRIAL_DAYS);
+  return end;
+}
+
+/**
+ * Whether a Free-plan account's trial has lapsed. Only meaningful for the Free plan —
+ * paid plans are never subject to a trial window, so callers should only invoke this
+ * after confirming `planSlug === 'free'`.
+ */
+export function isFreeTrialExpired(accountCreatedAt: Date, now: Date = new Date()): boolean {
+  return now.getTime() >= freeTrialEndsAt(accountCreatedAt).getTime();
+}
+
 /**
  * Amount in kobo (Paystack's smallest currency unit) for a plan's price.
  * Use this when building a Paystack charge/initialize payload.

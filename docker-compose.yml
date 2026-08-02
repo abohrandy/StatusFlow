@@ -16,7 +16,8 @@ services:
       - ./database/migrations/002_billing_system.sql:/docker-entrypoint-initdb.d/02_billing_schema.sql
       - ./database/migrations/003_referral_system.sql:/docker-entrypoint-initdb.d/03_referral_schema.sql
       - ./database/migrations/004_notification_metadata.sql:/docker-entrypoint-initdb.d/04_notification_metadata.sql
-      - ./database/seeds/001_seed_plans_and_data.sql:/docker-entrypoint-initdb.d/05_seeds.sql
+      - ./database/migrations/005_trial_abuse_prevention.sql:/docker-entrypoint-initdb.d/05_trial_abuse_prevention.sql
+      - ./database/seeds/001_seed_plans_and_data.sql:/docker-entrypoint-initdb.d/06_seeds.sql
 
   redis:
     image: redis:7-alpine

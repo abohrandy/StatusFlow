@@ -4,7 +4,9 @@ export type SubscriptionErrorCode =
   | 'SCHEDULE_QUOTA_EXCEEDED'
   | 'WHATSAPP_ACCOUNT_LIMIT_REACHED'
   | 'MEDIA_TYPE_NOT_ALLOWED'
-  | 'FEATURE_NOT_AVAILABLE';
+  | 'FEATURE_NOT_AVAILABLE'
+  | 'TRIAL_EXPIRED'
+  | 'PHONE_NUMBER_ALREADY_USED_FOR_TRIAL';
 
 /** A plan that would satisfy the request the caller was just denied for. */
 export interface UpgradeSuggestion {

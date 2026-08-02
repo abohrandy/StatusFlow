@@ -1,24 +1,67 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { ApiError } from '@statusflow/api-client';
+import { apiClient } from '../lib/apiClient';
 
 export const WhatsAppPairing: React.FC = () => {
   const [method, setMethod] = useState<'PAIRING_CODE' | 'QR_CODE'>('PAIRING_CODE');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleGenerateCode = (e: React.FormEvent) => {
+  useEffect(() => {
+    apiClient
+      .whatsappStatus()
+      .then((status) => {
+        setIsConnected(status.connected);
+        if (status.phoneNumber) setPhoneNumber(status.phoneNumber);
+      })
+      .catch(() => {
+        // No session yet, or a transient error — either way, default to "not connected".
+      });
+  }, []);
+
+  const handleGenerateCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
-      setPairingCode('87B9-4K21');
+    setError(null);
+    try {
+      const { sessionId: id, pairingCode: code } = await apiClient.requestWhatsAppPairing(phoneNumber);
+      setSessionId(id);
+      setPairingCode(code);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not request a pairing code. Please try again.');
+    } finally {
       setLoading(false);
-    }, 600);
+    }
   };
 
-  const handleSimulatePair = () => {
+  // Only the pairing-code path actually collects a phone number to check/persist — the QR
+  // flow (below) never has one to give the backend, so it stays a local-only simulation
+  // exactly as it was before, same as this whole QR path already was.
+  const handleConfirmPairingCode = async () => {
+    if (!sessionId) return;
+    try {
+      await apiClient.confirmWhatsAppPairing(sessionId);
+      setIsConnected(true);
+      setPairingCode(null);
+    } catch {
+      setError('Could not confirm the connection. Please try again.');
+    }
+  };
+
+  const handleSimulateQrScan = () => {
     setIsConnected(true);
-    setPairingCode(null);
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      await apiClient.disconnectWhatsApp();
+    } finally {
+      setIsConnected(false);
+    }
   };
 
   return (
@@ -41,14 +84,18 @@ export const WhatsAppPairing: React.FC = () => {
             </div>
           </div>
           {isConnected && (
-            <button 
-              onClick={() => setIsConnected(false)}
+            <button
+              onClick={handleDisconnect}
               className="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-medium transition-all"
             >
               Disconnect Session
             </button>
           )}
         </div>
+
+        {error && (
+          <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">{error}</div>
+        )}
 
         {!isConnected && (
           <>
@@ -103,7 +150,7 @@ export const WhatsAppPairing: React.FC = () => {
                       {pairingCode}
                     </div>
                     <button
-                      onClick={handleSimulatePair}
+                      onClick={handleConfirmPairingCode}
                       className="px-6 py-2.5 bg-emerald-500 text-zinc-950 font-semibold text-xs rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 transition-all"
                     >
                       Simulate Pairing Complete
@@ -125,7 +172,7 @@ export const WhatsAppPairing: React.FC = () => {
                   />
                 </div>
                 <button
-                  onClick={handleSimulatePair}
+                  onClick={handleSimulateQrScan}
                   className="px-6 py-2.5 bg-emerald-500 text-zinc-950 font-semibold text-xs rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 transition-all"
                 >
                   Simulate QR Scan Complete

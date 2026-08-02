@@ -180,4 +180,29 @@ export class ApiClient {
   markAllNotificationsRead() {
     return this.request<{ ok: boolean }>('/notifications/read-all', { method: 'POST' });
   }
+
+  // --- WhatsApp ---------------------------------------------------------------
+
+  whatsappStatus() {
+    return this.request<{ connected: boolean; status: string; phoneNumber: string | null }>('/whatsapp/status');
+  }
+
+  /** Throws `ApiError` (status 403) with a Free-trial-abuse or account-limit message if blocked. */
+  requestWhatsAppPairing(phoneNumber: string) {
+    return this.request<{ sessionId: string; pairingCode: string }>('/whatsapp/pairing/request', {
+      method: 'POST',
+      body: JSON.stringify({ phoneNumber }),
+    });
+  }
+
+  confirmWhatsAppPairing(sessionId: string) {
+    return this.request<{ connected: boolean; phoneNumber: string | null }>('/whatsapp/pairing/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    });
+  }
+
+  disconnectWhatsApp() {
+    return this.request<{ ok: boolean }>('/whatsapp/disconnect', { method: 'POST' });
+  }
 }
