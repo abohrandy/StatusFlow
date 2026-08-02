@@ -89,21 +89,30 @@ export const HistoryAndCalendar: React.FC = () => {
           {/* Calendar Views */}
           {calendarMode === 'MONTHLY' && (
             <div className="space-y-2">
-              <div className="grid grid-cols-7 gap-2 text-center text-xs font-semibold text-zinc-400 pb-2 border-b border-zinc-800">
-                <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+              <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center text-[10px] sm:text-xs font-semibold text-zinc-400 pb-2 border-b border-zinc-800">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                  <div key={day}>
+                    <span className="sm:hidden">{day[0]}</span>
+                    <span className="hidden sm:inline">{day}</span>
+                  </div>
+                ))}
               </div>
-              <div className="grid grid-cols-7 gap-2">
+              <div className="grid grid-cols-7 gap-1 sm:gap-2">
                 {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-                  <div 
-                    key={day} 
-                    className="h-24 p-2 rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col justify-between hover:border-emerald-500/50 transition-all cursor-pointer"
+                  <div
+                    key={day}
+                    className="h-12 sm:h-20 md:h-24 p-1 sm:p-2 rounded-lg sm:rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col justify-between hover:border-emerald-500/50 transition-all cursor-pointer"
                   >
-                    <span className="text-[11px] font-semibold text-zinc-400">{day}</span>
+                    <span className="text-[9px] sm:text-[11px] font-semibold text-zinc-400">{day}</span>
                     {day === 28 && (
-                      <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] space-y-0.5">
-                        <div className="font-bold truncate">09:30 AM - Image</div>
-                        <div className="text-[9px] text-zinc-400">Drag to Reschedule</div>
-                      </div>
+                      <>
+                        {/* Full detail on larger screens; a plain dot on phones where there's no room */}
+                        <div className="hidden sm:block p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] space-y-0.5">
+                          <div className="font-bold truncate">09:30 AM - Image</div>
+                          <div className="text-[9px] text-zinc-400">Drag to Reschedule</div>
+                        </div>
+                        <span className="sm:hidden self-end w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      </>
                     )}
                   </div>
                 ))}
@@ -112,9 +121,12 @@ export const HistoryAndCalendar: React.FC = () => {
           )}
 
           {calendarMode === 'WEEKLY' && (
-            <div className="grid grid-cols-7 gap-4">
+            /* Each day column needs real width for its event cards, so below sm it scrolls
+               horizontally (day-by-day, like a mobile calendar's week view) instead of
+               squeezing all 7 columns down to unreadable widths. */
+            <div className="flex sm:grid sm:grid-cols-7 gap-4 overflow-x-auto sm:overflow-visible -mx-1 px-1 sm:mx-0 sm:px-0">
               {['Sun 26', 'Mon 27', 'Tue 28', 'Wed 29', 'Thu 30', 'Fri 31', 'Sat 01'].map((dayStr, i) => (
-                <div key={i} className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3 min-h-[280px]">
+                <div key={i} className="min-w-[140px] sm:min-w-0 flex-1 sm:flex-none p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3 min-h-[280px]">
                   <div className="text-xs font-bold text-white border-b border-zinc-800 pb-2">{dayStr}</div>
                   {i === 2 && (
                     <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs space-y-1">

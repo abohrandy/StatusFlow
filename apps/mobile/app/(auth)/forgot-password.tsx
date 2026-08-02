@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
@@ -30,7 +31,7 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <Card style={styles.card}>
         <Text style={styles.title}>Reset Password</Text>
         <Text style={styles.subtitle}>Enter your email to receive recovery instructions</Text>
@@ -70,7 +71,7 @@ export default function ForgotPasswordScreen() {
           <Text style={styles.footerLink}>Back to Sign In</Text>
         </Pressable>
       </Card>
-    </View>
+    </SafeAreaView>
   );
 }
 

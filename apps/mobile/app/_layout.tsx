@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Stack, usePathname, useRouter } from 'expo-router';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import {
   useFonts,
@@ -71,20 +72,25 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: Colors.background },
-      }}
-    >
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="composer" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="calendar" />
-      <Stack.Screen name="history" />
-      <Stack.Screen name="pairing" />
-      <Stack.Screen name="billing" />
-      <Stack.Screen name="notifications" />
-      <Stack.Screen name="(auth)" />
-    </Stack>
+    // Every screen that calls useSafeAreaInsets() (TopAppBar, BottomSheet, the tab bar)
+    // needs this ancestor — without it those hooks silently fall back to zero insets,
+    // so content sits under the status bar/notch/home-indicator on real devices.
+    <SafeAreaProvider>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.background },
+        }}
+      >
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="composer" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="calendar" />
+        <Stack.Screen name="history" />
+        <Stack.Screen name="pairing" />
+        <Stack.Screen name="billing" />
+        <Stack.Screen name="notifications" />
+        <Stack.Screen name="(auth)" />
+      </Stack>
+    </SafeAreaProvider>
   );
 }

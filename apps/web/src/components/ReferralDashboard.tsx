@@ -182,12 +182,12 @@ export const ReferralDashboard: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {data.history.map((r) => (
-              <div key={r.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex items-center justify-between gap-4 text-xs">
+              <div key={r.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 text-xs">
                 <div>
                   <div className="font-semibold text-white">{r.referred_email || 'Signed up via link'}</div>
                   <div className="text-zinc-400 mt-0.5">Invited {new Date(r.created_at).toLocaleDateString()}</div>
                 </div>
-                <span className={`px-2.5 py-1 rounded-full font-mono border ${STATUS_STYLES[r.status] || STATUS_STYLES.invited}`}>
+                <span className={`self-start sm:self-auto px-2.5 py-1 rounded-full font-mono border ${STATUS_STYLES[r.status] || STATUS_STYLES.invited}`}>
                   {r.status.replace('_', ' ').toUpperCase()}
                 </span>
               </div>

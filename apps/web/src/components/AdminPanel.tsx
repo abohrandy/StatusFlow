@@ -52,13 +52,15 @@ export const AdminPanel: React.FC = () => {
           <p className="text-sm text-zinc-400 mt-1">Real-time platform metrics, WhatsApp socket health, queue throughput, storage usage, and weekly retention.</p>
         </div>
 
-        {/* Tab Selector */}
-        <div className="flex flex-wrap gap-1 p-1 bg-zinc-950 rounded-xl border border-zinc-800">
+        {/* Tab Selector — 9 items wrap into an unreadable multi-row mess on phones, so it
+            scrolls horizontally below md instead (same overflow-x-auto pattern used for the
+            history log's filter pills). */}
+        <div className="flex gap-1 p-1 bg-zinc-950 rounded-xl border border-zinc-800 overflow-x-auto md:flex-wrap">
           {(['metrics', 'subscriptions', 'payments', 'invoices', 'referrals', 'webhooks', 'users', 'workers', 'audit'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
+              className={`shrink-0 whitespace-nowrap px-3.5 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
                 activeTab === t ? 'bg-emerald-500 text-zinc-950 shadow-md' : 'text-zinc-400 hover:text-white'
               }`}
             >
@@ -524,14 +526,14 @@ const PaymentsLedger: React.FC = () => {
       ) : (
         <div className="space-y-3">
           {payments.map((p) => (
-            <div key={p.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex items-center justify-between text-xs">
+            <div key={p.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4 text-xs">
               <div>
                 <div className="font-semibold text-white">{p.email}</div>
                 <div className="text-zinc-400 mt-0.5">
                   Ref: <span className="font-mono">{p.reference}</span> • {p.plan_slug}
                 </div>
               </div>
-              <div className="text-right">
+              <div className="md:text-right">
                 <div className="font-bold text-white text-sm">{naira(p.amount)}</div>
                 <div className="text-zinc-500">{p.status} • {fmtDate(p.created_at)}</div>
               </div>
@@ -561,12 +563,12 @@ const InvoicesLedger: React.FC = () => {
       ) : (
         <div className="space-y-3">
           {invoices.map((inv) => (
-            <div key={inv.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex items-center justify-between text-xs">
+            <div key={inv.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4 text-xs">
               <div>
                 <div className="font-semibold text-white">{inv.email}</div>
                 <div className="text-zinc-400 mt-0.5">{inv.invoice_number} • {inv.plan_slug}</div>
               </div>
-              <div className="text-right">
+              <div className="md:text-right">
                 <div className="font-bold text-white text-sm">{naira(inv.amount)}</div>
                 <div className="text-zinc-500">{inv.status} • {fmtDate(inv.issued_at)}</div>
               </div>
@@ -596,12 +598,12 @@ const ReferralRewardsLedger: React.FC = () => {
       ) : (
         <div className="space-y-3">
           {rewards.map((r) => (
-            <div key={r.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex items-center justify-between text-xs">
+            <div key={r.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4 text-xs">
               <div>
                 <div className="font-semibold text-white">{r.referrer_email}</div>
                 <div className="text-zinc-400 mt-0.5">{r.reward_type.replace(/_/g, ' ')} • requires {r.referrals_required} referral(s)</div>
               </div>
-              <div className="text-right">
+              <div className="md:text-right">
                 <div className="text-emerald-400 font-semibold">{r.status}</div>
                 <div className="text-zinc-500">{fmtDate(r.granted_at)}</div>
               </div>
@@ -634,14 +636,14 @@ const WebhookLogsLedger: React.FC = () => {
       ) : (
         <div className="space-y-2 font-mono text-[11px]">
           {logs.map((log) => (
-            <div key={log.id} className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-between gap-4">
+            <div key={log.id} className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 flex flex-wrap items-center gap-x-4 gap-y-1">
               <span className="text-zinc-300">{log.event_type || 'unparsed'}</span>
-              <span className="text-zinc-500 truncate">{log.reference || '—'}</span>
+              <span className="text-zinc-500 truncate max-w-full">{log.reference || '—'}</span>
               <span className={log.signature_valid ? 'text-emerald-400' : 'text-red-400'}>
                 {log.signature_valid ? 'valid sig' : 'INVALID sig'}
               </span>
               <span className={log.processed ? 'text-emerald-400' : 'text-amber-400'}>{log.processed ? 'processed' : log.processing_error || 'pending'}</span>
-              <span className="text-zinc-600">{fmtDate(log.received_at)}</span>
+              <span className="text-zinc-600 ml-auto">{fmtDate(log.received_at)}</span>
             </div>
           ))}
         </div>

@@ -23,6 +23,14 @@ function DashboardShell() {
   const { user, isAdmin, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'queue' | 'composer' | 'calendar' | 'notifications' | 'pairing' | 'media' | 'billing' | 'referrals' | 'settings' | 'admin'>('dashboard');
   const [smartPrompt, setSmartPrompt] = useState<'renewalSavings' | 'expiryWarning' | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Shared by every nav button — picking a destination should also close the mobile
+  // drawer, otherwise the sidebar stays open covering the content it just navigated to.
+  const navigate = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    setSidebarOpen(false);
+  };
 
   // Checked once per session on load — these are proactive nudges, not reactive to a
   // specific user action, so they can surface regardless of which tab is active.
@@ -39,20 +47,42 @@ function DashboardShell() {
   }, []);
 
   return (
-    <div className="flex h-screen bg-zinc-950 text-zinc-100">
-      {/* Sidebar Navigation */}
-      <aside className="w-64 border-r border-zinc-800 bg-zinc-900/50 p-6 flex flex-col justify-between">
+    <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
+      {/* Mobile-only backdrop, dismisses the drawer when tapped outside it */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-black/60 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar Navigation — an off-canvas drawer below md, a static column at md+ */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-30 w-64 border-r border-zinc-800 bg-zinc-900 p-6 flex flex-col justify-between transition-transform duration-200 ease-in-out ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } md:static md:z-auto md:bg-zinc-900/50 md:translate-x-0`}
+      >
         <div>
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center font-bold text-zinc-950 text-xl shadow-lg shadow-emerald-500/20">
-              S
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center font-bold text-zinc-950 text-xl shadow-lg shadow-emerald-500/20">
+                S
+              </div>
+              <span className="font-bold text-xl tracking-tight text-white">StatusFlow</span>
             </div>
-            <span className="font-bold text-xl tracking-tight text-white">StatusFlow</span>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="md:hidden p-1 text-zinc-400 hover:text-white"
+              aria-label="Close menu"
+            >
+              ✕
+            </button>
           </div>
 
           <nav className="space-y-1">
             <button
-              onClick={() => setActiveTab('dashboard')}
+              onClick={() => navigate('dashboard')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'dashboard' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
               }`}
@@ -60,7 +90,7 @@ function DashboardShell() {
               Dashboard
             </button>
             <button
-              onClick={() => setActiveTab('composer')}
+              onClick={() => navigate('composer')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'composer' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
               }`}
@@ -68,7 +98,7 @@ function DashboardShell() {
               Status Composer
             </button>
             <button
-              onClick={() => setActiveTab('calendar')}
+              onClick={() => navigate('calendar')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'calendar' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
               }`}
@@ -76,7 +106,7 @@ function DashboardShell() {
               History & Calendar
             </button>
             <button
-              onClick={() => setActiveTab('notifications')}
+              onClick={() => navigate('notifications')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'notifications' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
               }`}
@@ -84,7 +114,7 @@ function DashboardShell() {
               Notifications <span className="ml-auto w-2 h-2 rounded-full bg-emerald-500"></span>
             </button>
             <button
-              onClick={() => setActiveTab('queue')}
+              onClick={() => navigate('queue')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'queue' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
               }`}
@@ -92,7 +122,7 @@ function DashboardShell() {
               Scheduled Queue
             </button>
             <button
-              onClick={() => setActiveTab('media')}
+              onClick={() => navigate('media')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'media' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
               }`}
@@ -100,7 +130,7 @@ function DashboardShell() {
               Media Library
             </button>
             <button
-              onClick={() => setActiveTab('pairing')}
+              onClick={() => navigate('pairing')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'pairing' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
               }`}
@@ -108,7 +138,7 @@ function DashboardShell() {
               WhatsApp Pairing
             </button>
             <button
-              onClick={() => setActiveTab('billing')}
+              onClick={() => navigate('billing')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'billing' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
               }`}
@@ -116,7 +146,7 @@ function DashboardShell() {
               Subscription & Billing
             </button>
             <button
-              onClick={() => setActiveTab('referrals')}
+              onClick={() => navigate('referrals')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'referrals' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
               }`}
@@ -124,7 +154,7 @@ function DashboardShell() {
               Refer & Earn
             </button>
             <button
-              onClick={() => setActiveTab('settings')}
+              onClick={() => navigate('settings')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'settings' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
               }`}
@@ -135,7 +165,7 @@ function DashboardShell() {
             {/* Super Admin Panel Only Visible to abohrandy@gmail.com */}
             {isAdmin && (
               <button
-                onClick={() => setActiveTab('admin')}
+                onClick={() => navigate('admin')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                   activeTab === 'admin' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-emerald-400/80 hover:bg-emerald-500/10 hover:text-emerald-400'
                 }`}
@@ -164,27 +194,36 @@ function DashboardShell() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-y-auto">
+      <main className="flex-1 flex flex-col overflow-y-auto min-w-0">
         {/* Top App Bar */}
-        <header className="h-16 border-b border-zinc-800 bg-zinc-900/30 px-8 flex items-center justify-between backdrop-blur-md sticky top-0 z-10">
-          <h1 className="text-lg font-semibold text-zinc-100 capitalize">{activeTab} Overview</h1>
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setActiveTab('notifications')}
+        <header className="h-16 border-b border-zinc-800 bg-zinc-900/30 px-4 sm:px-6 md:px-8 flex items-center justify-between gap-3 backdrop-blur-md sticky top-0 z-10">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="md:hidden p-2 -ml-2 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800/60"
+              aria-label="Open menu"
+            >
+              ☰
+            </button>
+            <h1 className="text-lg font-semibold text-zinc-100 capitalize truncate">{activeTab} Overview</h1>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+            <button
+              onClick={() => navigate('notifications')}
               className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white transition-all relative"
             >
               🔔
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
             </button>
-            <div className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-medium border border-emerald-500/20 flex items-center gap-2">
+            <div className="px-2.5 sm:px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-medium border border-emerald-500/20 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              WhatsApp Socket Connected
+              <span className="hidden sm:inline">WhatsApp Socket Connected</span>
             </div>
           </div>
         </header>
 
         {/* Dynamic View Shell */}
-        <div className="p-8 max-w-6xl w-full mx-auto space-y-6">
+        <div className="p-4 sm:p-6 md:p-8 max-w-6xl w-full mx-auto space-y-6">
           {activeTab === 'dashboard' && <DashboardOverview />}
           {activeTab === 'composer' && <StatusComposer onNavigateToBilling={() => setActiveTab('billing')} />}
           {activeTab === 'calendar' && <HistoryAndCalendar />}

@@ -151,18 +151,26 @@ export const ScheduledQueue: React.FC = () => {
             <span className="text-xs text-zinc-400">July 2026</span>
           </div>
 
-          <div className="grid grid-cols-7 gap-2 text-center text-xs font-semibold text-zinc-400 pb-2 border-b border-zinc-800">
-            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+          <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center text-[10px] sm:text-xs font-semibold text-zinc-400 pb-2 border-b border-zinc-800">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+              <div key={day}>
+                <span className="sm:hidden">{day[0]}</span>
+                <span className="hidden sm:inline">{day}</span>
+              </div>
+            ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1 sm:gap-2">
             {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-              <div key={day} className="h-20 p-2 rounded-xl bg-zinc-950/60 border border-zinc-800/80 flex flex-col justify-between text-left">
-                <span className="text-[11px] font-semibold text-zinc-400">{day}</span>
+              <div key={day} className="h-12 sm:h-16 md:h-20 p-1 sm:p-2 rounded-lg sm:rounded-xl bg-zinc-950/60 border border-zinc-800/80 flex flex-col justify-between text-left">
+                <span className="text-[9px] sm:text-[11px] font-semibold text-zinc-400">{day}</span>
                 {day === 28 && (
-                  <div className="p-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] truncate font-medium">
-                    2 Scheduled Posts
-                  </div>
+                  <>
+                    <div className="hidden sm:block p-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] truncate font-medium">
+                      2 Scheduled Posts
+                    </div>
+                    <span className="sm:hidden self-end w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  </>
                 )}
               </div>
             ))}

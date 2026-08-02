@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
@@ -43,7 +44,8 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Card style={styles.card}>
         <Text style={styles.title}>StatusFlow</Text>
         <Text style={styles.subtitle}>Sign in to your account</Text>
@@ -111,12 +113,14 @@ export default function LoginScreen() {
           </Pressable>
         </View>
       </Card>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background, padding: Spacing.marginMobile, justifyContent: 'center' },
+  safeArea: { flex: 1, backgroundColor: Colors.background },
+  screen: { flex: 1, padding: Spacing.marginMobile, justifyContent: 'center' },
   card: { padding: Spacing.lg, gap: Spacing.sm },
   title: {
     ...Typography.headlineLg,

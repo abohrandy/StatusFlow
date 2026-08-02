@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View, type DimensionValue } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { BottomSheet, EmptyState, TopAppBar } from '../../components';
@@ -15,7 +15,16 @@ export interface MobileMediaFile {
 
 type Filter = 'all' | 'images' | 'videos';
 
+// Fixed at 2 columns regardless of screen width wastes most of a tablet's space; scale
+// up the column count with available width instead.
+function useMediaColumnWidth(): DimensionValue {
+  const { width } = useWindowDimensions();
+  const columns = width >= 900 ? 4 : width >= 600 ? 3 : 2;
+  return `${100 / columns - 2}%` as DimensionValue;
+}
+
 export default function MediaLibraryScreen() {
+  const cardWidth = useMediaColumnWidth();
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
@@ -117,7 +126,7 @@ export default function MediaLibraryScreen() {
             {filteredMedia.map((item) => {
               const isVideo = item.mimeType.startsWith('video');
               return (
-                <Pressable key={item.id} style={styles.mediaCard} onPress={() => setSelectedFile(item)}>
+                <Pressable key={item.id} style={[styles.mediaCard, { width: cardWidth }]} onPress={() => setSelectedFile(item)}>
                   <View style={styles.thumbnailWrap}>
                     <Image source={{ uri: item.fileUrl }} style={styles.thumbnail} />
                     <View style={styles.typeBadge}>
@@ -216,7 +225,6 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   mediaCard: {
-    width: '47%',
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: Radius.lg,
     overflow: 'hidden',

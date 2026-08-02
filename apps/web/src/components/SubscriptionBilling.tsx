@@ -233,7 +233,7 @@ export const SubscriptionBilling: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {payments.map((tx) => (
-              <div key={tx.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex items-center justify-between gap-4">
+              <div key={tx.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                 <div>
                   <div className="font-semibold text-sm text-white capitalize">{tx.plan_slug.replace('-', ' ')}</div>
                   <div className="text-xs text-zinc-400 mt-1">
@@ -270,14 +270,14 @@ export const SubscriptionBilling: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {invoices.map((inv) => (
-              <div key={inv.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex items-center justify-between gap-4 text-xs">
+              <div key={inv.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 text-xs">
                 <div>
                   <div className="font-semibold text-white">{inv.invoice_number}</div>
                   <div className="text-zinc-400 mt-0.5">
                     {formatDate(inv.period_start)} – {formatDate(inv.period_end)}
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="sm:text-right">
                   <div className="font-bold text-white text-sm">₦{Number(inv.amount).toLocaleString()}</div>
                   <div className="text-zinc-500 uppercase">{inv.status}</div>
                 </div>
