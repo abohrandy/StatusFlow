@@ -77,3 +77,11 @@ export async function markSessionDisconnected(userId: string): Promise<void> {
     [userId],
   );
 }
+
+export async function markPairingSessionFailed(sessionId: string, userId: string): Promise<void> {
+  await pool.query(
+    `UPDATE whatsapp_sessions SET status = 'DISCONNECTED'
+     WHERE id = $1 AND user_id = $2 AND status = 'PAIRING'`,
+    [sessionId, userId],
+  );
+}

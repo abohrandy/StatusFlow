@@ -3,6 +3,7 @@ import { assertCanConnectWhatsAppAccount, SubscriptionError, type PlanSlug } fro
 import { WhatsAppConnection } from '@statusflow/baileys-engine';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../utils/asyncHandler';
+import { describeError } from '../utils/describeError';
 import { getActiveSubscription } from '../repositories/billingRepository';
 import { redisConnection } from '../redis';
 import {
@@ -12,6 +13,7 @@ import {
   isPhoneNumberBlockedForTrial,
   markSessionConnected,
   markSessionDisconnected,
+  markPairingSessionFailed,
   recordTrialPhoneNumber,
 } from '../repositories/whatsappRepository';
 
@@ -52,12 +54,17 @@ whatsappRouter.post('/pairing/request', asyncHandler(async (req, res) => {
   }
 
   const session = await createPairingSession(req.user!.id, phoneNumber);
-  if (planSlug === 'free') {
-    await recordTrialPhoneNumber(phoneNumber, req.user!.id);
-  }
-
   const connection = new WhatsAppConnection(session.id, redisConnection);
-  const pairingCode = await connection.requestPairingCode(phoneNumber);
+  let pairingCode: string;
+  try {
+    // Baileys expects the country-code number as digits, without the leading plus.
+    pairingCode = await connection.requestPairingCode(phoneNumber.replace(/\D/g, ''));
+  } catch (err) {
+    await markPairingSessionFailed(session.id, req.user!.id);
+    console.error('[WhatsApp] Pairing code request failed:', describeError(err));
+    return res.status(502).json({ error: `WhatsApp pairing could not be started: ${describeError(err)}` });
+  }
+  if (planSlug === 'free') await recordTrialPhoneNumber(phoneNumber, req.user!.id);
 
   res.status(201).json({ sessionId: session.id, pairingCode });
 }));
