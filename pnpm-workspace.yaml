@@ -6,4 +6,6 @@ allowBuilds:
   msgpackr-extract: true
   protobufjs: true
 ignoredBuilds: []
+blockExoticSubdeps: false
+
 

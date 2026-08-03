@@ -15,7 +15,8 @@
     "@supabase/supabase-js": "^2.39.0",
     "@statusflow/types": "workspace:*",
     "@statusflow/utils": "workspace:*",
-    "@statusflow/subscriptions": "workspace:*"
+    "@statusflow/subscriptions": "workspace:*",
+    "@statusflow/baileys-engine": "workspace:*"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",

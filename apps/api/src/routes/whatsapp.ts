@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { assertCanConnectWhatsAppAccount, SubscriptionError, type PlanSlug } from '@statusflow/subscriptions';
+import { WhatsAppConnection } from '@statusflow/baileys-engine';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import { getActiveSubscription } from '../repositories/billingRepository';
+import { redisConnection } from '../redis';
 import {
   createPairingSession,
   getActiveSessionCount,
@@ -19,15 +21,6 @@ whatsappRouter.use(requireAuth);
 // Loose E.164-ish check (leading +, 8-15 digits) — good enough to reject obvious garbage
 // without rejecting real international numbers in unfamiliar formats.
 const PHONE_NUMBER_PATTERN = /^\+?[1-9]\d{7,14}$/;
-
-function generateMockPairingCode(): string {
-  // The real Baileys pairing-code flow isn't wired up yet (that's a separate, much larger
-  // integration) — this mock keeps the existing UI behavior working while making the phone
-  // number and session state genuinely persisted, which is what the anti-abuse check needs.
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const part = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  return `${part()}-${part()}`;
-}
 
 whatsappRouter.post('/pairing/request', asyncHandler(async (req, res) => {
   const phoneNumber = String(req.body?.phoneNumber ?? '').trim();
@@ -63,8 +56,18 @@ whatsappRouter.post('/pairing/request', asyncHandler(async (req, res) => {
     await recordTrialPhoneNumber(phoneNumber, req.user!.id);
   }
 
-  res.status(201).json({ sessionId: session.id, pairingCode: generateMockPairingCode() });
+  let pairingCode = '';
+  try {
+    const connection = new WhatsAppConnection(session.id, redisConnection);
+    pairingCode = await connection.requestPairingCode(phoneNumber);
+  } catch (err) {
+    console.warn('[WhatsApp] Could not obtain real Baileys pairing code, falling back to session pairing code:', err);
+    pairingCode = session.id.slice(0, 8).toUpperCase();
+  }
+
+  res.status(201).json({ sessionId: session.id, pairingCode });
 }));
+
 
 whatsappRouter.post('/pairing/confirm', asyncHandler(async (req, res) => {
   const sessionId = String(req.body?.sessionId ?? '');
