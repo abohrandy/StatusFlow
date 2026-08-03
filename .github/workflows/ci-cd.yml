@@ -15,18 +15,38 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js & pnpm
+        # No `version:` here on purpose — pnpm/action-setup reads it from the
+        # `packageManager` field in package.json, which is the single source of truth for
+        # the version that actually generated pnpm-lock.yaml. Pinning a different version
+        # here (this used to hardcode 8.15.1 against a lockfileVersion '9.0' file, which
+        # only pnpm 9+ can even read) makes `--frozen-lockfile` below fail immediately with
+        # "Cannot install with frozen-lockfile because pnpm-lock.yaml is absent" — pnpm
+        # doesn't error on an incompatible lockfile, it just can't parse it and treats it as
+        # missing. That failure meant this job — and therefore the deploy job that depends
+        # on it — never passed on any push to main.
         uses: pnpm/action-setup@v3
-        with:
-          version: 8.15.1
 
       - name: Install Monorepo Dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck Workspace
-        run: pnpm --recursive exec tsc --noEmit
+        # Not `pnpm --recursive exec tsc --noEmit` — several shared packages
+        # (packages/types, ui, api-client, validation, utils) intentionally have no
+        # tsconfig.json of their own (they're plain TS consumed straight from src by
+        # whichever app imports them, typechecked as part of that app's build), so running
+        # tsc in every workspace package unconditionally fails on those with no config to
+        # find. Only typecheck the packages/apps that actually declare one.
+        run: |
+          set -e
+          for f in $(find . -maxdepth 3 -iname "tsconfig.json" -not -path "*/node_modules/*"); do
+            d=$(dirname "$f")
+            echo "== Typechecking $d =="
+            (cd "$d" && npx tsc --noEmit -p tsconfig.json)
+          done
 
-      - name: Execute Automated Unit & Integration Tests
-        run: pnpm test
+      # No automated test suite exists in this repo yet — there's nothing for `pnpm test`
+      # to run (no package defines a "test" script), so that step would fail this job on
+      # every push. Add it back once real tests exist.
 
       - name: Build Web Production Bundle
         run: pnpm --filter @statusflow/web build
