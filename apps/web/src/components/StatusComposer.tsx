@@ -36,8 +36,8 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
       setMediaLibrary(prev => [media, ...prev]);
       setSelectedMediaUrl(media.fileUrl);
       setShowMediaModal(false);
-    } catch {
-      // Modal stays open so the user can retry.
+    } catch (err) {
+      setSaveStatusMessage(err instanceof ApiError ? err.message : 'Upload failed. Please try again.');
     } finally {
       setUploadingMedia(false);
       e.target.value = '';

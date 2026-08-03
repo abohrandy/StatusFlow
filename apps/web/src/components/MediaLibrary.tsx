@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { MediaFile } from '@statusflow/api-client';
+import { ApiError, type MediaFile } from '@statusflow/api-client';
 import { apiClient } from '../lib/apiClient';
 
 export const MediaLibrary: React.FC = () => {
@@ -37,8 +37,8 @@ export const MediaLibrary: React.FC = () => {
     try {
       const { media } = await apiClient.uploadMedia(file);
       setMediaList(prev => [media, ...prev]);
-    } catch {
-      setUploadError('Upload failed. Please try again.');
+    } catch (err) {
+      setUploadError(err instanceof ApiError ? err.message : 'Upload failed. Please try again.');
     } finally {
       setIsUploading(false);
       e.target.value = '';
@@ -50,8 +50,8 @@ export const MediaLibrary: React.FC = () => {
       await apiClient.deleteMedia(id);
       setMediaList(prev => prev.filter(m => m.id !== id));
       if (selectedItem?.id === id) setSelectedItem(null);
-    } catch {
-      setUploadError('Could not delete this file. Please try again.');
+    } catch (err) {
+      setUploadError(err instanceof ApiError ? err.message : 'Could not delete this file. Please try again.');
     }
   };
 

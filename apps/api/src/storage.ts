@@ -20,6 +20,9 @@ export interface UploadedMedia {
 
 /** Requires a public Supabase Storage bucket named `status-media` — see docs/SUPABASE_SETUP.md. */
 export async function uploadMediaFile(userId: string, buffer: Buffer, fileName: string, mimeType: string): Promise<UploadedMedia> {
+  if (!supabaseUrl || !serviceRoleKey || serviceRoleKey === 'your-service-role-key') {
+    throw new Error('Media storage is not configured. Set SUPABASE_SERVICE_ROLE_KEY on the API service.');
+  }
   const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
   const path = `${userId}/${randomUUID()}-${safeName}`;
 
