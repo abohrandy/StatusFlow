@@ -88,7 +88,14 @@ whatsappRouter.post('/pairing/request', rateLimiter(10, 15 * 60 * 1000, (req) =>
 }));
 
 
-whatsappRouter.post('/pairing/confirm', rateLimiter(20, 15 * 60 * 1000), asyncHandler(async (req, res) => {
+// The client polls this every 3s while waiting for the user to complete pairing on their
+// phone (open WhatsApp -> Linked Devices -> Link with phone number -> type the code) —
+// realistically well over a minute for a first-time user. At 3s intervals a 15-minute
+// window needs up to 300 requests just to cover its own duration; anything much lower
+// (this used to be 20, good for one minute) silently rate-limits a legitimate pairing
+// attempt before the user ever finishes, and the client swallows that error, so the UI
+// hangs on "waiting for pairing" forever even after the phone-side linking succeeds.
+whatsappRouter.post('/pairing/confirm', rateLimiter(300, 15 * 60 * 1000, (req) => `${req.user?.id ?? 'anonymous'}:${req.ip ?? 'unknown'}`), asyncHandler(async (req, res) => {
   const sessionId = String(req.body?.sessionId ?? '');
   if (!sessionId) {
     return res.status(400).json({ error: 'sessionId is required.' });
