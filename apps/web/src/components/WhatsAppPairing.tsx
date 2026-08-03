@@ -75,7 +75,7 @@ export const WhatsAppPairing: React.FC = () => {
           </div>
           {method === 'PAIRING_CODE' && !pairingCode ? <form onSubmit={handleGenerateCode} className="space-y-4">
             <label className="text-xs font-medium text-zinc-400">WhatsApp Phone Number (with Country Code)
-              <input type="text" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full mt-1.5 px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm" placeholder="+2348123456789" required />
+              <input type="text" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full mt-1.5 px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm" placeholder="+234" required />
             </label>
             <button type="submit" disabled={loading} className="w-full py-3 bg-emerald-500 font-semibold text-zinc-950 text-sm rounded-xl">{loading ? 'Requesting Code...' : 'Request 8-Digit Pairing Code'}</button>
           </form> : method === 'PAIRING_CODE' ? <div className="text-center space-y-4 py-4">
