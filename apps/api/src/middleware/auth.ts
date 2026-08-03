@@ -54,13 +54,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const result = await pool.query<{ role: 'USER' | 'ADMIN' }>(
       `INSERT INTO users (id, email)
        VALUES ($1, $2)
-       ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email
+       ON CONFLICT (email) DO UPDATE SET id = EXCLUDED.id
        RETURNING role`,
       [id, email],
     );
 
     req.user = { id, email, role: result.rows[0].role };
     next();
+
   } catch (err: unknown) {
     const errorDetails = describeError(err);
     console.error('[Auth] requireAuth failed:', errorDetails);
