@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { describeError } from './utils/describeError';
 
 /**
  * Shared Postgres connection pool for the billing subsystem. `DATABASE_URL` is required
@@ -9,5 +10,5 @@ export const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('[DB] Unexpected error on idle Postgres client:', err.message);
+  console.error('[DB] Unexpected error on idle Postgres client:', describeError(err));
 });

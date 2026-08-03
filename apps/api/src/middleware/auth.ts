@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { pool } from '../db';
+import { describeError } from '../utils/describeError';
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
@@ -60,8 +61,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
     req.user = { id, email, role: result.rows[0].role };
     next();
-  } catch (err: any) {
-    console.error('[Auth] requireAuth failed:', err.message);
+  } catch (err: unknown) {
+    console.error('[Auth] requireAuth failed:', describeError(err));
     res.status(500).json({ error: 'Failed to resolve authenticated user.' });
   }
 }
