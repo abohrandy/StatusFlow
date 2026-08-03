@@ -56,6 +56,17 @@ export class WhatsAppConnection extends EventEmitter {
         logger,
         version,
         printQRInTerminal: false,
+        // Baileys rotates its internal QR refs on this interval regardless of whether the
+        // caller is doing QR or pairing-code auth (the server always sends both), and once
+        // the small fixed batch of refs is exhausted it force-closes the socket with
+        // `timedOut` ("QR refs attempts ended") — the default (60s then 20s per rotation)
+        // exhausts in roughly 2-3 minutes. A phone-pairing-code user has to open WhatsApp,
+        // find Linked Devices, and type 8 characters — routinely longer than that — so the
+        // connection was closing (and getting silently reconnected onto a brand-new session
+        // by the close handler below) while the code was still being typed in, which
+        // invalidates it: WhatsApp then rejects it with "couldn't link device". A much
+        // longer window means the socket survives for as long as pairing realistically takes.
+        qrTimeout: 5 * 60_000,
       });
 
       sock.ev.on('creds.update', saveCreds);
