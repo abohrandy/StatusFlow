@@ -31,6 +31,38 @@ export async function searchSubscriptions(query: string, limit = 50): Promise<Ad
   return result.rows;
 }
 
+export async function listUsers(limit = 100) {
+  const result = await pool.query(
+    `SELECT u.id, u.email, u.role, u.created_at,
+            COALESCE(sub.plan_slug, 'free') AS plan,
+            COALESCE(ws.sessions, 0)::int AS sessions,
+            COALESCE(posts.post_count, 0)::int AS "postsCount",
+            CASE WHEN u.role = 'ADMIN' THEN 'ADMIN' ELSE 'ACTIVE' END AS status
+     FROM users u
+     LEFT JOIN LATERAL (
+       SELECT s.plan_slug
+       FROM subscriptions s
+       WHERE s.user_id = u.id
+       ORDER BY s.created_at DESC
+       LIMIT 1
+     ) sub ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT COUNT(*) AS sessions
+       FROM whatsapp_sessions s
+       WHERE s.user_id = u.id AND s.status = 'CONNECTED'
+     ) ws ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT COUNT(*) AS post_count
+       FROM status_posts p
+       WHERE p.user_id = u.id
+     ) posts ON TRUE
+     ORDER BY u.created_at DESC
+     LIMIT $1`,
+    [limit],
+  );
+  return result.rows;
+}
+
 export async function getSubscriptionDetail(subscriptionId: string) {
   const sub = await pool.query(
     `SELECT s.*, u.email FROM subscriptions s JOIN users u ON u.id = s.user_id WHERE s.id = $1`,

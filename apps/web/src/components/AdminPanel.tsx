@@ -23,20 +23,15 @@ function fmtDate(value: string | null): string {
 export const AdminPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminTab>('subscriptions');
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [usersList, setUsersList] = useState<Array<{ id: string; email: string; plan: string; sessions: number; postsCount: number; status: string }>>([]);
 
   useEffect(() => {
     apiClient.adminGetDashboard().then(setStats).catch(() => {});
   }, []);
 
-  const [usersList, setUsersList] = useState([
-    { id: 'usr_1', email: 'marketer@agency.com', plan: 'MONTHLY', sessions: 1, postsCount: 142, status: 'ACTIVE' },
-    { id: 'usr_2', email: 'john@smallbiz.com', plan: 'WEEKLY', sessions: 1, postsCount: 28, status: 'ACTIVE' },
-    { id: 'usr_3', email: 'freeuser@gmail.com', plan: 'FREE', sessions: 1, postsCount: 4, status: 'ACTIVE' },
-  ]);
-
-  const handlePlanChange = (userId: string, newPlan: string) => {
-    setUsersList(prev => prev.map(u => u.id === userId ? { ...u, plan: newPlan } : u));
-  };
+  useEffect(() => {
+    apiClient.adminListUsers().then(({ users }) => setUsersList(users)).catch(() => setUsersList([]));
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -123,7 +118,8 @@ export const AdminPanel: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <select
                     value={u.plan}
-                    onChange={(e) => handlePlanChange(u.id, e.target.value)}
+                    disabled
+                    onChange={() => undefined}
                     className="px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-emerald-400 font-semibold focus:outline-none"
                   >
                     <option value="FREE">Free Tier</option>

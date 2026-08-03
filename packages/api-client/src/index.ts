@@ -202,6 +202,18 @@ export class ApiClient {
     return this.request<{ subscriptions: any[] }>(`/admin/subscriptions?search=${encodeURIComponent(search)}`);
   }
 
+  adminListUsers() {
+    return this.request<{ users: Array<{
+      id: string;
+      email: string;
+      role: string;
+      plan: string;
+      sessions: number;
+      postsCount: number;
+      status: string;
+    }> }>('/admin/users');
+  }
+
   adminGetSubscriptionDetail(id: string) {
     return this.request<{ subscription: any; payments: any[]; invoices: any[]; referralRewards: any[] }>(
       `/admin/subscriptions/${encodeURIComponent(id)}`,

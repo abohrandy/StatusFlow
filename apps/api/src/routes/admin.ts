@@ -10,6 +10,7 @@ import {
   listInvoices,
   listPayments,
   listReferralRewards,
+  listUsers,
   listWebhookLogs,
   manuallyActivateSubscription,
   searchSubscriptions,
@@ -26,6 +27,10 @@ adminRouter.get('/dashboard', asyncHandler(async (req, res) => {
 adminRouter.get('/subscriptions', asyncHandler(async (req, res) => {
   const search = typeof req.query.search === 'string' ? req.query.search : '';
   res.json({ subscriptions: await searchSubscriptions(search) });
+}));
+
+adminRouter.get('/users', asyncHandler(async (_req, res) => {
+  res.json({ users: await listUsers() });
 }));
 
 adminRouter.get('/subscriptions/:id', asyncHandler(async (req, res) => {
