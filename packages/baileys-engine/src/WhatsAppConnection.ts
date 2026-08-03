@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import type { Redis } from 'ioredis';
 import { Boom } from '@hapi/boom';
-import { makeWASocket, DisconnectReason, type WASocket } from '@whiskeysockets/baileys';
+import { fetchLatestBaileysVersion, makeWASocket, DisconnectReason, type WASocket } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import { useRedisAuthState } from './redisAuthState';
 
@@ -44,9 +44,17 @@ export class WhatsAppConnection extends EventEmitter {
     this.closingIntentionally = false;
     this.connectingSocket = (async () => {
       const { state, saveCreds } = await useRedisAuthState(this.sessionId, this.redis);
+      // The WhatsApp Web protocol version baked into the installed @whiskeysockets/baileys
+      // package goes stale fast — WhatsApp's servers silently stop responding to outdated
+      // versions (no error, the socket just never reaches 'open' or emits a QR), which is
+      // indistinguishable from a network failure. Fetching the current version keeps new
+      // connections working without needing to bump the dependency; falls back to the
+      // bundled version (previous behavior) if the fetch itself fails.
+      const { version } = await fetchLatestBaileysVersion({ timeout: 5_000 });
       const sock = makeWASocket({
         auth: state,
         logger,
+        version,
         printQRInTerminal: false,
       });
 
