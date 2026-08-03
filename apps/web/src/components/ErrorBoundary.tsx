@@ -2,6 +2,10 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
+  /** Defaults to the full-page fallback below — pass a smaller one when boundary-ing a
+   * single section (e.g. one dashboard tab) so a local failure doesn't read as the whole
+   * app being down. */
+  fallback?: ReactNode;
 }
 
 interface State {
@@ -25,6 +29,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
+      if (this.props.fallback) return this.props.fallback;
       return (
         <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 text-center space-y-4">
           <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center text-xl font-bold">

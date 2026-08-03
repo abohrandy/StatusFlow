@@ -267,19 +267,23 @@ function DashboardShell() {
           </div>
         </header>
 
-        {/* Dynamic View Shell */}
+        {/* Dynamic View Shell — each tab gets its own error boundary (keyed on activeTab,
+            so switching tabs remounts a fresh one) so a crash in one page's data/rendering
+            can't take down the sidebar with it; every other nav link keeps working. */}
         <div className="p-4 sm:p-6 md:p-8 max-w-6xl w-full mx-auto space-y-6">
-          {activeTab === 'dashboard' && <DashboardOverview />}
-          {activeTab === 'composer' && <StatusComposer onNavigateToBilling={() => setActiveTab('billing')} />}
-          {activeTab === 'calendar' && <HistoryAndCalendar />}
-          {activeTab === 'notifications' && <NotificationCenter />}
-          {activeTab === 'queue' && <ScheduledQueue />}
-          {activeTab === 'pairing' && <WhatsAppPairing />}
-          {activeTab === 'media' && <MediaLibrary />}
-          {activeTab === 'billing' && <SubscriptionBilling />}
-          {activeTab === 'referrals' && <ReferralDashboard />}
-          {activeTab === 'settings' && <UserSettings />}
-          {activeTab === 'admin' && isAdmin && <AdminPanel />}
+          <ErrorBoundary key={activeTab} fallback={<TabErrorFallback />}>
+            {activeTab === 'dashboard' && <DashboardOverview />}
+            {activeTab === 'composer' && <StatusComposer onNavigateToBilling={() => setActiveTab('billing')} />}
+            {activeTab === 'calendar' && <HistoryAndCalendar />}
+            {activeTab === 'notifications' && <NotificationCenter />}
+            {activeTab === 'queue' && <ScheduledQueue />}
+            {activeTab === 'pairing' && <WhatsAppPairing />}
+            {activeTab === 'media' && <MediaLibrary />}
+            {activeTab === 'billing' && <SubscriptionBilling />}
+            {activeTab === 'referrals' && <ReferralDashboard />}
+            {activeTab === 'settings' && <UserSettings />}
+            {activeTab === 'admin' && isAdmin && <AdminPanel />}
+          </ErrorBoundary>
         </div>
       </main>
 
@@ -301,6 +305,20 @@ function DashboardShell() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function TabErrorFallback() {
+  return (
+    <div className="p-8 rounded-2xl bg-zinc-900 border border-red-500/20 text-center space-y-3">
+      <div className="w-10 h-10 mx-auto rounded-full bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center text-lg font-bold">
+        ⚠️
+      </div>
+      <h2 className="text-sm font-semibold text-white">This section couldn't load</h2>
+      <p className="text-xs text-zinc-400 max-w-sm mx-auto">
+        Something went wrong rendering this page. The rest of StatusFlow is unaffected — pick another item from the menu, or come back to this one to try again.
+      </p>
     </div>
   );
 }

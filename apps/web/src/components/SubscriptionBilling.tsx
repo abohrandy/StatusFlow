@@ -91,7 +91,7 @@ export const SubscriptionBilling: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const currentPlanSlug: PlanSlug = data?.plan.slug ?? 'free';
+  const currentPlanSlug: PlanSlug = data?.plan?.slug ?? 'free';
 
   async function handleUpgrade(planSlug: PlanSlug) {
     setCheckoutLoading(planSlug);
