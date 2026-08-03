@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { assertCanConnectWhatsAppAccount, SubscriptionError, type PlanSlug } from '@statusflow/subscriptions';
 import { WhatsAppConnection } from '@statusflow/baileys-engine';
 import { requireAuth } from '../middleware/auth';
+import { rateLimiter } from '../middleware/rateLimiter';
 import { asyncHandler } from '../utils/asyncHandler';
 import { describeError } from '../utils/describeError';
 import { getActiveSubscription } from '../repositories/billingRepository';
@@ -25,9 +26,10 @@ const activeConnections = new Map<string, WhatsAppConnection>();
 // without rejecting real international numbers in unfamiliar formats.
 const PHONE_NUMBER_PATTERN = /^\+?[1-9]\d{7,14}$/;
 
-whatsappRouter.post('/pairing/request', asyncHandler(async (req, res) => {
+whatsappRouter.post('/pairing/request', rateLimiter(5, 15 * 60 * 1000), asyncHandler(async (req, res) => {
   const method = req.body?.method === 'QR_CODE' ? 'QR_CODE' : 'PAIRING_CODE';
   const phoneNumber = String(req.body?.phoneNumber ?? '').trim();
+  const normalizedPhoneNumber = phoneNumber.replace(/\D/g, '');
   if (method === 'PAIRING_CODE' && !PHONE_NUMBER_PATTERN.test(phoneNumber)) {
     return res.status(400).json({ error: 'Enter a valid WhatsApp phone number with country code, e.g. +2348123456789.' });
   }
@@ -45,7 +47,7 @@ whatsappRouter.post('/pairing/request', asyncHandler(async (req, res) => {
   // Only Free-plan accounts are subject to the one-trial-per-phone-number rule — a paying
   // customer connecting a number some past free-trial account also used isn't the abuse
   // this exists to prevent.
-  if (planSlug === 'free' && (await isPhoneNumberBlockedForTrial(phoneNumber, req.user!.id))) {
+  if (planSlug === 'free' && method === 'PAIRING_CODE' && (await isPhoneNumberBlockedForTrial(normalizedPhoneNumber, req.user!.id))) {
     return res.status(403).json(
       new SubscriptionError(
         'PHONE_NUMBER_ALREADY_USED_FOR_TRIAL',
@@ -55,7 +57,7 @@ whatsappRouter.post('/pairing/request', asyncHandler(async (req, res) => {
     );
   }
 
-  const session = await createPairingSession(req.user!.id, phoneNumber);
+  const session = await createPairingSession(req.user!.id, method === 'PAIRING_CODE' ? normalizedPhoneNumber : '');
   const connection = new WhatsAppConnection(session.id, redisConnection);
   activeConnections.set(session.id, connection);
   if (method === 'QR_CODE') {
@@ -72,23 +74,29 @@ whatsappRouter.post('/pairing/request', asyncHandler(async (req, res) => {
   let pairingCode: string;
   try {
     // Baileys expects the country-code number as digits, without the leading plus.
-    pairingCode = await connection.requestPairingCode(phoneNumber.replace(/\D/g, ''));
+    pairingCode = await connection.requestPairingCode(normalizedPhoneNumber);
   } catch (err) {
     await markPairingSessionFailed(session.id, req.user!.id);
+    activeConnections.delete(session.id);
     console.error('[WhatsApp] Pairing code request failed:', describeError(err));
     return res.status(502).json({ error: `WhatsApp pairing could not be started: ${describeError(err)}` });
   }
   activeConnections.set(session.id, connection);
-  if (planSlug === 'free') await recordTrialPhoneNumber(phoneNumber, req.user!.id);
+  if (planSlug === 'free') await recordTrialPhoneNumber(normalizedPhoneNumber, req.user!.id);
 
   res.status(201).json({ sessionId: session.id, pairingCode });
 }));
 
 
-whatsappRouter.post('/pairing/confirm', asyncHandler(async (req, res) => {
+whatsappRouter.post('/pairing/confirm', rateLimiter(20, 15 * 60 * 1000), asyncHandler(async (req, res) => {
   const sessionId = String(req.body?.sessionId ?? '');
   if (!sessionId) {
     return res.status(400).json({ error: 'sessionId is required.' });
+  }
+
+  const connection = activeConnections.get(sessionId);
+  if (!connection || !(await connection.waitUntilOpen(2_000))) {
+    return res.status(409).json({ error: 'WhatsApp pairing has not been completed yet.' });
   }
 
   const session = await markSessionConnected(sessionId, req.user!.id);

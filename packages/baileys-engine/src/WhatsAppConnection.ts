@@ -66,15 +66,32 @@ export class WhatsAppConnection extends EventEmitter {
   /** Starts the connection and requests a real WhatsApp pairing code for `phoneNumber`. */
   async requestPairingCode(phoneNumber: string): Promise<string> {
     const sock = await this.ensureSocket();
-    // Baileys needs a moment to complete the initial WebSocket handshake before
-    // requestPairingCode is called. Calling it immediately can close the socket
-    // and surface the unhelpful "Connection Closed" error from WhatsApp.
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    // Baileys rejects pairing requests made before the initial socket handshake
+    // has started. The event can be emitted synchronously during ensureSocket(),
+    // so the already-known connecting state is handled immediately.
+    if (this.status !== 'connecting' && this.status !== 'open') {
+      throw new Error('WhatsApp socket is not ready for pairing.');
+    }
+    await new Promise<void>((resolve, reject) => {
+      if (this.status === 'open') return resolve();
+      const timeout = setTimeout(() => { cleanup(); reject(new Error('Timed out waiting for WhatsApp socket.')); }, 10_000);
+      const onStatus = (status: ConnectionStatus) => {
+        if (status === 'open' || status === 'connecting') { cleanup(); resolve(); }
+        if (status === 'close') { cleanup(); reject(new Error('Connection Closed')); }
+      };
+      const cleanup = () => { clearTimeout(timeout); this.off('status', onStatus); this.off('close', onClose); };
+      const onClose = () => { cleanup(); reject(new Error('Connection Closed')); };
+      this.on('status', onStatus);
+      this.on('close', onClose);
+    });
+    // Give the WebSocket handshake a brief settling window after the initial
+    // connecting event; WhatsApp can close an otherwise valid socket if this
+    // API is called in the same tick as socket creation.
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
     return sock.requestPairingCode(phoneNumber);
   }
 
   async requestQrCode(timeoutMs = 30_000): Promise<string> {
-    await this.ensureSocket();
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => { cleanup(); reject(new Error('Timed out waiting for WhatsApp QR code.')); }, timeoutMs);
       const onQr = (qr: string) => { cleanup(); resolve(qr); };
@@ -86,6 +103,7 @@ export class WhatsAppConnection extends EventEmitter {
       };
       this.on('qr', onQr);
       this.on('close', onClose);
+      void this.ensureSocket().catch((err) => { cleanup(); reject(err); });
     });
   }
 
