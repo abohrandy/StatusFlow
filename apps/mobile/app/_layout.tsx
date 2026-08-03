@@ -12,10 +12,12 @@ import {
 import { Colors } from '../theme';
 import { useAuthStore } from '../store/useAuthStore';
 import { supabase } from '../lib/supabase';
+import { apiClient } from '../lib/apiClient';
 
 SplashScreen.preventAutoHideAsync();
 
 const AUTH_ROUTES = ['/login', '/register', '/forgot-password'];
+const ONBOARDING_ROUTE = '/onboarding';
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -31,7 +33,12 @@ export default function RootLayout() {
   const pathname = usePathname();
   const router = useRouter();
   const isAuthRoute = AUTH_ROUTES.includes(pathname);
-  const isReady = (fontsLoaded || !!fontError) && !isSessionLoading;
+  const isOnboardingRoute = pathname === ONBOARDING_ROUTE;
+  // `null` = not checked yet (distinct from `false`, so we don't briefly redirect to
+  // onboarding before we actually know) — fetched from the same /api/v1/profile endpoint
+  // the web app uses, not kept client-side only.
+  const [onboarded, setOnboarded] = React.useState<boolean | null>(null);
+  const isReady = (fontsLoaded || !!fontError) && !isSessionLoading && (!isAuthenticated || onboarded !== null);
 
   // Bootstrap the persisted Supabase session once, then keep auth state in
   // sync with sign-in/sign-out/token-refresh events (including the Google
@@ -50,6 +57,17 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, [setUserFromSupabase, setSessionLoading]);
 
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setOnboarded(null);
+      return;
+    }
+    apiClient
+      .get('/profile')
+      .then(({ data }) => setOnboarded(data.onboarded))
+      .catch(() => setOnboarded(false));
+  }, [isAuthenticated]);
+
   // The root layout must mount its navigator (Stack) unconditionally on first
   // render — Expo Router throws "Attempted to navigate before mounting the Root
   // Layout component" if a navigation action (including <Redirect>) is dispatched
@@ -62,10 +80,14 @@ export default function RootLayout() {
       router.replace('/(auth)/login');
     } else if (isAuthenticated && isAuthRoute) {
       router.replace('/');
+    } else if (isAuthenticated && onboarded === false && !isOnboardingRoute) {
+      router.replace('/onboarding');
+    } else if (isAuthenticated && onboarded === true && isOnboardingRoute) {
+      router.replace('/');
     }
 
     SplashScreen.hideAsync();
-  }, [isReady, isAuthenticated, isAuthRoute]);
+  }, [isReady, isAuthenticated, isAuthRoute, onboarded, isOnboardingRoute]);
 
   if (!isReady) {
     return null;
@@ -83,6 +105,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="onboarding" />
         <Stack.Screen name="composer" options={{ presentation: 'modal' }} />
         <Stack.Screen name="calendar" />
         <Stack.Screen name="history" />

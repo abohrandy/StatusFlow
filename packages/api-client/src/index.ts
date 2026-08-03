@@ -205,4 +205,17 @@ export class ApiClient {
   disconnectWhatsApp() {
     return this.request<{ ok: boolean }>('/whatsapp/disconnect', { method: 'POST' });
   }
+
+  // --- Profile ---------------------------------------------------------------
+
+  getProfile() {
+    return this.request<{ onboarded: boolean; fullName: string | null; companyName: string | null }>('/profile');
+  }
+
+  saveProfile(fullName: string, companyName: string) {
+    return this.request<{ fullName: string; companyName: string }>('/profile', {
+      method: 'PUT',
+      body: JSON.stringify({ fullName, companyName }),
+    });
+  }
 }

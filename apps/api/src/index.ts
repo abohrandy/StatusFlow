@@ -6,6 +6,7 @@ import { referralsRouter } from './routes/referrals';
 import { adminRouter } from './routes/admin';
 import { notificationsRouter } from './routes/notifications';
 import { whatsappRouter } from './routes/whatsapp';
+import { profileRouter } from './routes/profile';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -23,6 +24,7 @@ app.use('/api/v1/referrals', referralsRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/notifications', notificationsRouter);
 app.use('/api/v1/whatsapp', whatsappRouter);
+app.use('/api/v1/profile', profileRouter);
 
 // Serve static frontend dashboard assets if available
 const webDistPath = path.join(__dirname, '../../web/dist');

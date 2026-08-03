@@ -24,6 +24,10 @@ function DashboardShell() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'queue' | 'composer' | 'calendar' | 'notifications' | 'pairing' | 'media' | 'billing' | 'referrals' | 'settings' | 'admin'>('dashboard');
   const [smartPrompt, setSmartPrompt] = useState<'renewalSavings' | 'expiryWarning' | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Sign Out lives in the sidebar, but that's an off-canvas drawer below md — on a phone,
+  // a user who never opens the hamburger menu has no visible way to sign out at all. This
+  // mirrors it in the header, reachable at every screen size without opening the drawer.
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   // Shared by every nav button — picking a destination should also close the mobile
   // drawer, otherwise the sidebar stays open covering the content it just navigated to.
@@ -80,99 +84,110 @@ function DashboardShell() {
             </button>
           </div>
 
-          <nav className="space-y-1">
-            <button
-              onClick={() => navigate('dashboard')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'dashboard' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
-              }`}
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={() => navigate('composer')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'composer' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
-              }`}
-            >
-              Status Composer
-            </button>
-            <button
-              onClick={() => navigate('calendar')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'calendar' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
-              }`}
-            >
-              History & Calendar
-            </button>
-            <button
-              onClick={() => navigate('notifications')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'notifications' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
-              }`}
-            >
-              Notifications <span className="ml-auto w-2 h-2 rounded-full bg-emerald-500"></span>
-            </button>
-            <button
-              onClick={() => navigate('queue')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'queue' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
-              }`}
-            >
-              Scheduled Queue
-            </button>
-            <button
-              onClick={() => navigate('media')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'media' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
-              }`}
-            >
-              Media Library
-            </button>
-            <button
-              onClick={() => navigate('pairing')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'pairing' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
-              }`}
-            >
-              WhatsApp Pairing
-            </button>
-            <button
-              onClick={() => navigate('billing')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'billing' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
-              }`}
-            >
-              Subscription & Billing
-            </button>
-            <button
-              onClick={() => navigate('referrals')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'referrals' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
-              }`}
-            >
-              Refer & Earn
-            </button>
-            <button
-              onClick={() => navigate('settings')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'settings' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
-              }`}
-            >
-              Settings
-            </button>
-
-            {/* Super Admin Panel Only Visible to abohrandy@gmail.com */}
-            {isAdmin && (
+          <nav className="space-y-5">
+            <div className="space-y-1">
+              <p className="px-4 mb-1 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Workspace</p>
               <button
-                onClick={() => navigate('admin')}
+                onClick={() => navigate('dashboard')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === 'admin' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-emerald-400/80 hover:bg-emerald-500/10 hover:text-emerald-400'
+                  activeTab === 'dashboard' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
                 }`}
               >
-                Admin Panel ⭐ <span className="ml-auto px-1.5 py-0.5 rounded bg-emerald-500/20 text-[10px] font-bold">SUPER</span>
+                <span className="text-base leading-none">📊</span> Dashboard
               </button>
-            )}
+              <button
+                onClick={() => navigate('composer')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === 'composer' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
+                }`}
+              >
+                <span className="text-base leading-none">✍️</span> Status Composer
+              </button>
+              <button
+                onClick={() => navigate('queue')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === 'queue' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
+                }`}
+              >
+                <span className="text-base leading-none">⏱️</span> Scheduled Queue
+              </button>
+              <button
+                onClick={() => navigate('calendar')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === 'calendar' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
+                }`}
+              >
+                <span className="text-base leading-none">📅</span> History & Calendar
+              </button>
+              <button
+                onClick={() => navigate('media')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === 'media' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
+                }`}
+              >
+                <span className="text-base leading-none">🖼️</span> Media Library
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              <p className="px-4 mb-1 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Connections</p>
+              <button
+                onClick={() => navigate('pairing')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === 'pairing' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
+                }`}
+              >
+                <span className="text-base leading-none">💬</span> WhatsApp Pairing
+              </button>
+              <button
+                onClick={() => navigate('notifications')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === 'notifications' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
+                }`}
+              >
+                <span className="text-base leading-none">🔔</span> Notifications <span className="ml-auto w-2 h-2 rounded-full bg-emerald-500"></span>
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              <p className="px-4 mb-1 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Account</p>
+              <button
+                onClick={() => navigate('billing')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === 'billing' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
+                }`}
+              >
+                <span className="text-base leading-none">💳</span> Subscription & Billing
+              </button>
+              <button
+                onClick={() => navigate('referrals')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === 'referrals' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
+                }`}
+              >
+                <span className="text-base leading-none">🎁</span> Refer & Earn
+              </button>
+              <button
+                onClick={() => navigate('settings')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === 'settings' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
+                }`}
+              >
+                <span className="text-base leading-none">⚙️</span> Settings
+              </button>
+
+              {/* Super Admin Panel Only Visible to abohrandy@gmail.com */}
+              {isAdmin && (
+                <button
+                  onClick={() => navigate('admin')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === 'admin' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-emerald-400/80 hover:bg-emerald-500/10 hover:text-emerald-400'
+                  }`}
+                >
+                  <span className="text-base leading-none">⭐</span> Admin Panel <span className="ml-auto px-1.5 py-0.5 rounded bg-emerald-500/20 text-[10px] font-bold">SUPER</span>
+                </button>
+              )}
+            </div>
           </nav>
         </div>
 
@@ -219,6 +234,38 @@ function DashboardShell() {
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <span className="hidden sm:inline">WhatsApp Socket Connected</span>
             </div>
+            <div className="relative">
+              <button
+                onClick={() => setAccountMenuOpen((open) => !open)}
+                className="w-9 h-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-sm flex items-center justify-center hover:bg-emerald-500/20 transition-all"
+                aria-label="Account menu"
+              >
+                {(user?.email || 'U')[0].toUpperCase()}
+              </button>
+              {accountMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setAccountMenuOpen(false)} aria-hidden="true" />
+                  <div className="absolute right-0 top-full mt-2 w-56 z-30 rounded-xl bg-zinc-900 border border-zinc-800 shadow-xl overflow-hidden">
+                    <div className="p-3 border-b border-zinc-800">
+                      <div className="text-xs text-zinc-500">Signed in as</div>
+                      <div className="text-sm text-white font-medium truncate">{user?.email || 'User Account'}</div>
+                    </div>
+                    <button
+                      onClick={() => { setAccountMenuOpen(false); navigate('settings'); }}
+                      className="w-full text-left px-3 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800/60 transition-all"
+                    >
+                      ⚙️ Settings
+                    </button>
+                    <button
+                      onClick={signOut}
+                      className="w-full text-left px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-all border-t border-zinc-800"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </header>
 
@@ -262,20 +309,34 @@ function DashboardShell() {
 
 export default function App() {
   const [page, setPage] = useState<'login' | 'register' | 'forgot-password' | 'onboarding'>('login');
-  const [onboarded, setOnboarded] = useState(false);
 
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <MainRouter page={page} setPage={setPage} onboarded={onboarded} setOnboarded={setOnboarded} />
+        <MainRouter page={page} setPage={setPage} />
       </AuthProvider>
     </ErrorBoundary>
 
   );
 }
 
-function MainRouter({ page, setPage, onboarded, setOnboarded }: any) {
+function MainRouter({ page, setPage }: any) {
   const { user, loading } = useAuth();
+  // `null` = not checked yet (distinct from `false`, so we don't flash the onboarding form
+  // before we actually know) — fetched from the profiles table, not kept client-side only,
+  // so a returning user who already onboarded isn't asked again every login.
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setOnboarded(null);
+      return;
+    }
+    apiClient
+      .getProfile()
+      .then((profile) => setOnboarded(profile.onboarded))
+      .catch(() => setOnboarded(false));
+  }, [user]);
 
   if (loading) {
     return (
@@ -289,6 +350,14 @@ function MainRouter({ page, setPage, onboarded, setOnboarded }: any) {
     if (page === 'register') return <Register onNavigate={setPage} />;
     if (page === 'forgot-password') return <ForgotPassword onNavigate={setPage} />;
     return <Login onNavigate={setPage} />;
+  }
+
+  if (onboarded === null) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-emerald-400 font-semibold">
+        Loading StatusFlow...
+      </div>
+    );
   }
 
   if (!onboarded) {

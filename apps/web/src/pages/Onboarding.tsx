@@ -1,12 +1,24 @@
 import React from 'react';
+import { apiClient } from '../lib/apiClient';
 
 export const Onboarding: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   const [fullName, setFullName] = React.useState('');
   const [businessName, setBusinessName] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onComplete();
+    setSaving(true);
+    setError('');
+    try {
+      await apiClient.saveProfile(fullName, businessName);
+      onComplete();
+    } catch (err: any) {
+      setError(err.message || 'Could not save your profile. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -19,6 +31,8 @@ export const Onboarding: React.FC<{ onComplete: () => void }> = ({ onComplete })
           <h1 className="text-2xl font-bold text-white">Welcome to StatusFlow</h1>
           <p className="text-sm text-zinc-400">Complete your profile to customize your scheduling workspace</p>
         </div>
+
+        {error && <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400 text-center">{error}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -47,9 +61,10 @@ export const Onboarding: React.FC<{ onComplete: () => void }> = ({ onComplete })
 
           <button
             type="submit"
+            disabled={saving}
             className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 font-semibold text-zinc-950 rounded-xl transition-all shadow-lg shadow-emerald-500/20"
           >
-            Continue to Dashboard
+            {saving ? 'Saving...' : 'Continue to Dashboard'}
           </button>
         </form>
       </div>
