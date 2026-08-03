@@ -20,6 +20,7 @@ export default function PairingScreen() {
   const [method, setMethod] = useState<PairingMethod>('code');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [qrCode, setQrCode] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -36,11 +37,40 @@ export default function PairingScreen() {
       });
   }, []);
 
+  // WhatsApp's mandatory post-pairing restart means the socket doesn't reach 'open' the
+  // instant the code/QR is accepted on the phone — it can take several seconds. Poll
+  // instead of relying on a single manually-tapped confirm (which was missing this
+  // window almost every time) so pairing completes on its own once the phone is done.
+  useEffect(() => {
+    if (!sessionId || isConnected) return;
+    const timer = setInterval(() => {
+      apiClient
+        .get('/whatsapp/status')
+        .then(({ data }) => {
+          if (data.connected) {
+            setIsConnected(true);
+            setPairingCode(null);
+            setQrCode(null);
+            return;
+          }
+          apiClient.post('/whatsapp/pairing/confirm', { sessionId }).then(() => {
+            setIsConnected(true);
+            setPairingCode(null);
+            setQrCode(null);
+          }).catch(() => {
+            // Not confirmed yet — keep polling.
+          });
+        })
+        .catch(() => {});
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [sessionId, isConnected]);
+
   const handleRequestCode = async () => {
     if (!phoneNumber) return;
     setLoading(true);
     try {
-      const { data } = await apiClient.post('/whatsapp/pairing/request', { phoneNumber });
+      const { data } = await apiClient.post('/whatsapp/pairing/request', { phoneNumber, method: 'PAIRING_CODE' });
       setSessionId(data.sessionId);
       setPairingCode(data.pairingCode);
     } catch (err) {
@@ -51,21 +81,18 @@ export default function PairingScreen() {
     }
   };
 
-  // Only the pairing-code path actually collects a phone number to check/persist — the QR
-  // flow (below) never has one to give the backend, so it stays a local-only simulation.
-  const handleConfirmPairingCode = async () => {
-    if (!sessionId) return;
+  const handleRequestQr = async () => {
+    setLoading(true);
     try {
-      await apiClient.post('/whatsapp/pairing/confirm', { sessionId });
-      setIsConnected(true);
-      setPairingCode(null);
-    } catch {
-      Alert.alert('Could not confirm', 'Please try again.');
+      const { data } = await apiClient.post('/whatsapp/pairing/request', { phoneNumber, method: 'QR_CODE' });
+      setSessionId(data.sessionId);
+      setQrCode(data.qrCode);
+    } catch (err) {
+      const message = axios.isAxiosError(err) ? err.response?.data?.error : null;
+      Alert.alert('Could not connect', message ?? 'Please try again.');
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const handleSimulateQrScan = () => {
-    setIsConnected(true);
   };
 
   const handleDisconnect = async () => {
@@ -155,6 +182,7 @@ export default function PairingScreen() {
               onChange={(next) => {
                 setMethod(next);
                 setPairingCode(null);
+                setQrCode(null);
               }}
             />
 
@@ -185,9 +213,10 @@ export default function PairingScreen() {
                     <View style={styles.codeBox}>
                       <Text style={styles.codeText}>{pairingCode}</Text>
                     </View>
-                    <Pressable style={styles.primaryButton} onPress={handleConfirmPairingCode}>
-                      <Text style={styles.primaryButtonLabel}>I've entered the code</Text>
-                    </Pressable>
+                    <View style={styles.waitingRow}>
+                      <ActivityIndicator color={Colors.primary} />
+                      <Text style={styles.waitingLabel}>Waiting for WhatsApp to confirm the pairing...</Text>
+                    </View>
                   </View>
                 )}
               </Card>
@@ -195,15 +224,28 @@ export default function PairingScreen() {
               <Card style={styles.section}>
                 <View style={styles.codeContainer}>
                   <Text style={styles.instructions}>Open WhatsApp → Linked Devices → Scan QR Code</Text>
-                  <View style={styles.qrWrapper}>
-                    <Image
-                      source={{ uri: 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=STATUSFLOW-MOBILE-PAIR' }}
-                      style={styles.qrImage}
-                    />
-                  </View>
-                  <Pressable style={styles.primaryButton} onPress={handleSimulateQrScan}>
-                    <Text style={styles.primaryButtonLabel}>I've scanned the code</Text>
-                  </Pressable>
+                  {!qrCode ? (
+                    <Pressable style={styles.primaryButton} onPress={handleRequestQr} disabled={loading}>
+                      {loading ? (
+                        <ActivityIndicator color={Colors.onPrimary} />
+                      ) : (
+                        <Text style={styles.primaryButtonLabel}>Generate QR Code</Text>
+                      )}
+                    </Pressable>
+                  ) : (
+                    <>
+                      <View style={styles.qrWrapper}>
+                        <Image
+                          source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrCode)}` }}
+                          style={styles.qrImage}
+                        />
+                      </View>
+                      <View style={styles.waitingRow}>
+                        <ActivityIndicator color={Colors.primary} />
+                        <Text style={styles.waitingLabel}>Waiting for WhatsApp to confirm the pairing...</Text>
+                      </View>
+                    </>
+                  )}
                 </View>
               </Card>
             )}
@@ -356,6 +398,11 @@ const styles = StyleSheet.create({
     color: Colors.onPrimary,
   },
   codeContainer: { alignItems: 'center', gap: Spacing.sm },
+  waitingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.sm },
+  waitingLabel: {
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
+  },
   instructions: {
     ...Typography.bodySm,
     color: Colors.onSurfaceVariant,
