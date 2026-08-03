@@ -62,10 +62,12 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     req.user = { id, email, role: result.rows[0].role };
     next();
   } catch (err: unknown) {
-    console.error('[Auth] requireAuth failed:', describeError(err));
-    res.status(500).json({ error: 'Failed to resolve authenticated user.' });
+    const errorDetails = describeError(err);
+    console.error('[Auth] requireAuth failed:', errorDetails);
+    res.status(500).json({ error: `Failed to resolve authenticated user: ${errorDetails}` });
   }
 }
+
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (req.user?.role !== 'ADMIN') {
