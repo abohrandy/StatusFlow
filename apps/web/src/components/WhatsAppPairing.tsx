@@ -24,6 +24,9 @@ export const WhatsAppPairing: React.FC = () => {
     const timer = window.setInterval(() => {
       apiClient.whatsappStatus().then((status) => {
         setIsConnected(status.connected);
+        if (!status.connected && sessionId) {
+          apiClient.confirmWhatsAppPairing(sessionId).then(() => setIsConnected(true)).catch(() => undefined);
+        }
         if (status.connected) setPairingCode(null);
       }).catch(() => undefined);
     }, 3000);

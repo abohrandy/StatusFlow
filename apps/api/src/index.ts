@@ -9,6 +9,7 @@ import { whatsappRouter } from './routes/whatsapp';
 import { profileRouter } from './routes/profile';
 import { postsRouter } from './routes/posts';
 import { mediaRouter } from './routes/media';
+import { ensureMediaStorageSchema } from './db';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -80,6 +81,9 @@ app.use((err: unknown, req: express.Request, res: express.Response, next: expres
   res.status(500).json({ error: 'Internal server error.' });
 });
 
-app.listen(PORT, () => {
-  console.log(`StatusFlow API server running on port ${PORT}`);
-});
+ensureMediaStorageSchema()
+  .then(() => app.listen(PORT, () => console.log(`StatusFlow API server running on port ${PORT}`)))
+  .catch((err) => {
+    console.error('[DB] Failed to ensure media schema:', err);
+    process.exit(1);
+  });

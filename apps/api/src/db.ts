@@ -9,6 +9,11 @@ export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+/** Keeps deployments that use an existing database volume in sync with the API schema. */
+export async function ensureMediaStorageSchema(): Promise<void> {
+  await pool.query('ALTER TABLE media_files ADD COLUMN IF NOT EXISTS storage_path TEXT');
+}
+
 pool.on('error', (err) => {
   console.error('[DB] Unexpected error on idle Postgres client:', describeError(err));
 });
