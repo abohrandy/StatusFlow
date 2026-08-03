@@ -9,6 +9,8 @@ RUN npm install -g pnpm typescript
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/ ./packages/
 COPY apps/ ./apps/
+COPY database/ ./database/
+
 
 # --frozen-lockfile: install exactly what's in pnpm-lock.yaml. --no-frozen-lockfile silently
 # re-resolves every dependency within its semver range on every build, which is how this
