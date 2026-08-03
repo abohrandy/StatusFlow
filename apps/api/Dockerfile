@@ -6,10 +6,11 @@ FROM node:22-alpine AS base
 WORKDIR /app
 RUN npm install -g pnpm typescript
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json .npmrc ./
 COPY packages/ ./packages/
 COPY apps/ ./apps/
 COPY database/ ./database/
+
 
 
 # --frozen-lockfile: install exactly what's in pnpm-lock.yaml. --no-frozen-lockfile silently
