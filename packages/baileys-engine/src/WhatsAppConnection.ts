@@ -73,6 +73,22 @@ export class WhatsAppConnection extends EventEmitter {
     return sock.requestPairingCode(phoneNumber);
   }
 
+  async requestQrCode(timeoutMs = 30_000): Promise<string> {
+    await this.ensureSocket();
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => { cleanup(); reject(new Error('Timed out waiting for WhatsApp QR code.')); }, timeoutMs);
+      const onQr = (qr: string) => { cleanup(); resolve(qr); };
+      const onClose = () => { cleanup(); reject(new Error('Connection Closed')); };
+      const cleanup = () => {
+        clearTimeout(timeout);
+        this.off('qr', onQr);
+        this.off('close', onClose);
+      };
+      this.on('qr', onQr);
+      this.on('close', onClose);
+    });
+  }
+
   getStatus(): ConnectionStatus {
     return this.status;
   }

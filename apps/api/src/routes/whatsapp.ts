@@ -19,14 +19,16 @@ import {
 
 export const whatsappRouter = Router();
 whatsappRouter.use(requireAuth);
+const activeConnections = new Map<string, WhatsAppConnection>();
 
 // Loose E.164-ish check (leading +, 8-15 digits) — good enough to reject obvious garbage
 // without rejecting real international numbers in unfamiliar formats.
 const PHONE_NUMBER_PATTERN = /^\+?[1-9]\d{7,14}$/;
 
 whatsappRouter.post('/pairing/request', asyncHandler(async (req, res) => {
+  const method = req.body?.method === 'QR_CODE' ? 'QR_CODE' : 'PAIRING_CODE';
   const phoneNumber = String(req.body?.phoneNumber ?? '').trim();
-  if (!PHONE_NUMBER_PATTERN.test(phoneNumber)) {
+  if (method === 'PAIRING_CODE' && !PHONE_NUMBER_PATTERN.test(phoneNumber)) {
     return res.status(400).json({ error: 'Enter a valid WhatsApp phone number with country code, e.g. +2348123456789.' });
   }
 
@@ -55,6 +57,18 @@ whatsappRouter.post('/pairing/request', asyncHandler(async (req, res) => {
 
   const session = await createPairingSession(req.user!.id, phoneNumber);
   const connection = new WhatsAppConnection(session.id, redisConnection);
+  activeConnections.set(session.id, connection);
+  if (method === 'QR_CODE') {
+    try {
+      const qrCode = await connection.requestQrCode();
+      return res.status(201).json({ sessionId: session.id, qrCode });
+    } catch (err) {
+      await markPairingSessionFailed(session.id, req.user!.id);
+      activeConnections.delete(session.id);
+      console.error('[WhatsApp] QR request failed:', describeError(err));
+      return res.status(502).json({ error: `WhatsApp QR could not be generated: ${describeError(err)}` });
+    }
+  }
   let pairingCode: string;
   try {
     // Baileys expects the country-code number as digits, without the leading plus.
@@ -64,6 +78,7 @@ whatsappRouter.post('/pairing/request', asyncHandler(async (req, res) => {
     console.error('[WhatsApp] Pairing code request failed:', describeError(err));
     return res.status(502).json({ error: `WhatsApp pairing could not be started: ${describeError(err)}` });
   }
+  activeConnections.set(session.id, connection);
   if (planSlug === 'free') await recordTrialPhoneNumber(phoneNumber, req.user!.id);
 
   res.status(201).json({ sessionId: session.id, pairingCode });

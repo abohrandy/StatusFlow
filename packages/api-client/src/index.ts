@@ -277,10 +277,10 @@ export class ApiClient {
   }
 
   /** Throws `ApiError` (status 403) with a Free-trial-abuse or account-limit message if blocked. */
-  requestWhatsAppPairing(phoneNumber: string) {
-    return this.request<{ sessionId: string; pairingCode: string }>('/whatsapp/pairing/request', {
+  requestWhatsAppPairing(phoneNumber: string, method: 'PAIRING_CODE' | 'QR_CODE' = 'PAIRING_CODE') {
+    return this.request<{ sessionId: string; pairingCode?: string; qrCode?: string }>('/whatsapp/pairing/request', {
       method: 'POST',
-      body: JSON.stringify({ phoneNumber }),
+      body: JSON.stringify({ phoneNumber, method }),
     });
   }
 
