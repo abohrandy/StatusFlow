@@ -26,7 +26,7 @@ const activeConnections = new Map<string, WhatsAppConnection>();
 // without rejecting real international numbers in unfamiliar formats.
 const PHONE_NUMBER_PATTERN = /^\+?[1-9]\d{7,14}$/;
 
-whatsappRouter.post('/pairing/request', rateLimiter(5, 15 * 60 * 1000), asyncHandler(async (req, res) => {
+whatsappRouter.post('/pairing/request', rateLimiter(10, 15 * 60 * 1000, (req) => `${req.user?.id ?? 'anonymous'}:${req.ip ?? 'unknown'}`), asyncHandler(async (req, res) => {
   const method = req.body?.method === 'QR_CODE' ? 'QR_CODE' : 'PAIRING_CODE';
   const phoneNumber = String(req.body?.phoneNumber ?? '').trim();
   const normalizedPhoneNumber = phoneNumber.replace(/\D/g, '');
