@@ -29,6 +29,7 @@ const logger = pino({ level: process.env.BAILEYS_LOG_LEVEL || 'warn' });
 export class WhatsAppConnection extends EventEmitter {
   private sock: WASocket | null = null;
   private status: ConnectionStatus = 'connecting';
+  private qrReady = false;
 
   constructor(private sessionId: string, private redis: Redis) {
     super();
@@ -47,6 +48,7 @@ export class WhatsAppConnection extends EventEmitter {
     sock.ev.on('creds.update', saveCreds);
     sock.ev.on('connection.update', (update) => {
       if (update.qr) {
+        this.qrReady = true;
         this.emit('qr', update.qr);
       }
       if (update.connection) {
@@ -66,28 +68,18 @@ export class WhatsAppConnection extends EventEmitter {
   /** Starts the connection and requests a real WhatsApp pairing code for `phoneNumber`. */
   async requestPairingCode(phoneNumber: string): Promise<string> {
     const sock = await this.ensureSocket();
-    // Baileys rejects pairing requests made before the initial socket handshake
-    // has started. The event can be emitted synchronously during ensureSocket(),
-    // so the already-known connecting state is handled immediately.
-    if (this.status !== 'connecting' && this.status !== 'open') {
-      throw new Error('WhatsApp socket is not ready for pairing.');
-    }
+    // Baileys only accepts a pairing request after it has emitted its initial
+    // QR/readiness event. Waiting for that signal avoids generating codes that
+    // WhatsApp immediately rejects as stale or invalid.
     await new Promise<void>((resolve, reject) => {
-      if (this.status === 'open') return resolve();
       const timeout = setTimeout(() => { cleanup(); reject(new Error('Timed out waiting for WhatsApp socket.')); }, 10_000);
-      const onStatus = (status: ConnectionStatus) => {
-        if (status === 'open' || status === 'connecting') { cleanup(); resolve(); }
-        if (status === 'close') { cleanup(); reject(new Error('Connection Closed')); }
-      };
-      const cleanup = () => { clearTimeout(timeout); this.off('status', onStatus); this.off('close', onClose); };
+      if (this.qrReady) { clearTimeout(timeout); return resolve(); }
+      const onQr = () => { cleanup(); resolve(); };
+      const cleanup = () => { clearTimeout(timeout); this.off('qr', onQr); this.off('close', onClose); };
       const onClose = () => { cleanup(); reject(new Error('Connection Closed')); };
-      this.on('status', onStatus);
+      this.on('qr', onQr);
       this.on('close', onClose);
     });
-    // Give the WebSocket handshake a brief settling window after the initial
-    // connecting event; WhatsApp can close an otherwise valid socket if this
-    // API is called in the same tick as socket creation.
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
     return sock.requestPairingCode(phoneNumber);
   }
 
