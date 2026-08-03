@@ -60,7 +60,7 @@ export async function requireScheduleQuota(req: Request, res: Response, next: Ne
     const planSlug = await loadPlanSlug(req.user!.id);
     const [result, accountCreatedAt] = await Promise.all([
       pool.query<{ last: string | null }>(
-        `SELECT MAX(scheduled_at) AS last FROM status_posts WHERE user_id = $1 AND status <> 'FAILED'`,
+        `SELECT MAX(scheduled_at) AS last FROM status_posts WHERE user_id = $1 AND status NOT IN ('FAILED', 'CANCELLED')`,
         [req.user!.id],
       ),
       getUserCreatedAt(req.user!.id),

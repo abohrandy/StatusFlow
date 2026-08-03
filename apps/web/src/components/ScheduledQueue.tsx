@@ -1,48 +1,46 @@
-import React, { useState } from 'react';
-
-export interface ScheduleItem {
-  id: string;
-  caption: string;
-  mediaType: 'IMAGE' | 'VIDEO' | 'TEXT';
-  scheduledAt: string; // ISO string
-  timezone: string;
-  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'CANCELLED';
-  isValid: boolean;
-}
-
-const INITIAL_SCHEDULES: ScheduleItem[] = [
-  { id: 'sch_1', caption: 'Flash Sale Alert! 30% Off Storewide Today Only 🔥', mediaType: 'IMAGE', scheduledAt: '2026-07-28T14:30', timezone: 'UTC', status: 'PENDING', isValid: true },
-  { id: 'sch_2', caption: 'New Product Line Unboxing & Demonstration 🎥', mediaType: 'VIDEO', scheduledAt: '2026-07-28T19:00', timezone: 'Africa/Lagos', status: 'PENDING', isValid: true },
-  { id: 'sch_3', caption: 'Good morning everyone! Stay tuned for updates.', mediaType: 'TEXT', scheduledAt: '2026-07-29T09:00', timezone: 'America/New_York', status: 'PENDING', isValid: true },
-];
+import React, { useEffect, useState } from 'react';
+import type { StatusPost } from '@statusflow/api-client';
+import { apiClient } from '../lib/apiClient';
 
 const TIMEZONES = ['UTC', 'Africa/Lagos', 'America/New_York', 'Europe/London', 'Asia/Dubai'];
 
+const STATUS_BADGE: Record<StatusPost['status'], string> = {
+  DRAFT: 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20',
+  SCHEDULED: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
+  QUEUED: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
+  PROCESSING: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
+  COMPLETED: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
+  FAILED: 'bg-red-500/10 text-red-400 border border-red-500/20',
+  CANCELLED: 'bg-red-500/10 text-red-400 border border-red-500/20',
+};
+
+const CANCELLABLE_STATUSES: StatusPost['status'][] = ['DRAFT', 'SCHEDULED', 'QUEUED'];
+
 export const ScheduledQueue: React.FC = () => {
-  const [schedules, setSchedules] = useState<ScheduleItem[]>(INITIAL_SCHEDULES);
+  const [schedules, setSchedules] = useState<StatusPost[]>([]);
+  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'LIST' | 'CALENDAR'>('LIST');
   const [selectedTimezone, setSelectedTimezone] = useState('Africa/Lagos');
-  const [editingItem, setEditingItem] = useState<ScheduleItem | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  const handleCancel = (id: string) => {
-    setSchedules(prev => prev.map(item => item.id === id ? { ...item, status: 'CANCELLED' } : item));
-  };
+  useEffect(() => {
+    apiClient
+      .listScheduledPosts()
+      .then(({ posts }) => setSchedules(posts ?? []))
+      .catch(() => setSchedules([]))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const handleDuplicate = (item: ScheduleItem) => {
-    const duplicated: ScheduleItem = {
-      ...item,
-      id: `sch_${Date.now()}`,
-      caption: `${item.caption} (Copy)`,
-      status: 'PENDING'
-    };
-    setSchedules(prev => [duplicated, ...prev]);
-  };
-
-  const handleSaveEdit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingItem) return;
-    setSchedules(prev => prev.map(item => item.id === editingItem.id ? editingItem : item));
-    setEditingItem(null);
+  const handleCancel = async (id: string) => {
+    setCancellingId(id);
+    try {
+      await apiClient.cancelStatusPost(id);
+      setSchedules((prev) => prev.filter((item) => item.id !== id));
+    } catch {
+      // Leave the item in place on failure so the user can see it and retry.
+    } finally {
+      setCancellingId(null);
+    }
   };
 
   return (
@@ -51,17 +49,17 @@ export const ScheduledQueue: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 rounded-2xl bg-zinc-900 border border-zinc-800">
         <div>
           <h2 className="text-xl font-bold text-white tracking-tight">Scheduled Queue Engine</h2>
-          <p className="text-sm text-zinc-400 mt-1">Manage, edit, cancel, and synchronize scheduled status updates across timezones.</p>
+          <p className="text-sm text-zinc-400 mt-1">Manage and cancel scheduled status updates across timezones.</p>
         </div>
 
         <div className="flex items-center gap-3">
           {/* Timezone Selector */}
-          <select 
+          <select
             value={selectedTimezone}
             onChange={(e) => setSelectedTimezone(e.target.value)}
             className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none"
           >
-            {TIMEZONES.map(tz => (
+            {TIMEZONES.map((tz) => (
               <option key={tz} value={tz}>{tz}</option>
             ))}
           </select>
@@ -92,56 +90,48 @@ export const ScheduledQueue: React.FC = () => {
       {viewMode === 'LIST' ? (
         <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
           <h3 className="font-semibold text-base text-white mb-2">Pending & Active Status Schedules</h3>
-          
-          <div className="space-y-3">
-            {schedules.map(item => (
-              <div key={item.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <span className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center">
-                    {item.mediaType}
-                  </span>
-                  <div>
-                    <div className="text-sm font-medium text-white truncate max-w-md">{item.caption}</div>
-                    <div className="text-xs text-zinc-400 mt-1 flex items-center gap-3">
-                      <span>🕒 {new Date(item.scheduledAt).toLocaleString()} ({selectedTimezone})</span>
-                      <span className="text-emerald-400">Valid</span>
+
+          {loading ? (
+            <div className="text-sm text-zinc-500 py-8 text-center">Loading your scheduled posts...</div>
+          ) : schedules.length === 0 ? (
+            <div className="text-sm text-zinc-500 py-8 text-center">
+              Nothing scheduled yet — head to the Composer to create your first status post.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {schedules.map((item) => (
+                <div key={item.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <span className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center">
+                      {item.mediaType}
+                    </span>
+                    <div>
+                      <div className="text-sm font-medium text-white truncate max-w-md">{item.caption || '(no caption)'}</div>
+                      <div className="text-xs text-zinc-400 mt-1 flex items-center gap-3">
+                        <span>🕒 {new Date(item.scheduledAt).toLocaleString()} ({selectedTimezone})</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-2 self-end md:self-auto">
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-mono ${
-                    item.status === 'PENDING' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                  }`}>
-                    {item.status}
-                  </span>
+                  <div className="flex items-center gap-2 self-end md:self-auto">
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-mono ${STATUS_BADGE[item.status]}`}>
+                      {item.status}
+                    </span>
 
-                  {item.status === 'PENDING' && (
-                    <>
-                      <button 
-                        onClick={() => setEditingItem(item)}
-                        className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium border border-zinc-700"
-                      >
-                        Edit
-                      </button>
-                      <button 
-                        onClick={() => handleDuplicate(item)}
-                        className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium border border-zinc-700"
-                      >
-                        Duplicate
-                      </button>
-                      <button 
+                    {CANCELLABLE_STATUSES.includes(item.status) && (
+                      <button
                         onClick={() => handleCancel(item.id)}
-                        className="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-medium"
+                        disabled={cancellingId === item.id}
+                        className="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-medium disabled:opacity-50"
                       >
-                        Cancel
+                        {cancellingId === item.id ? 'Cancelling...' : 'Cancel'}
                       </button>
-                    </>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         /* Calendar View Synchronization */
@@ -164,62 +154,9 @@ export const ScheduledQueue: React.FC = () => {
             {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
               <div key={day} className="h-12 sm:h-16 md:h-20 p-1 sm:p-2 rounded-lg sm:rounded-xl bg-zinc-950/60 border border-zinc-800/80 flex flex-col justify-between text-left">
                 <span className="text-[9px] sm:text-[11px] font-semibold text-zinc-400">{day}</span>
-                {day === 28 && (
-                  <>
-                    <div className="hidden sm:block p-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] truncate font-medium">
-                      2 Scheduled Posts
-                    </div>
-                    <span className="sm:hidden self-end w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  </>
-                )}
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Edit Modal */}
-      {editingItem && (
-        <div className="fixed inset-0 z-50 bg-zinc-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <form onSubmit={handleSaveEdit} className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4">
-            <h3 className="font-bold text-base text-white">Edit Schedule Details</h3>
-
-            <div>
-              <label className="text-xs text-zinc-400 font-medium">Caption</label>
-              <textarea
-                value={editingItem.caption}
-                onChange={(e) => setEditingItem({ ...editingItem, caption: e.target.value })}
-                className="w-full mt-1 p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-xs"
-                rows={3}
-              />
-            </div>
-
-            <div>
-              <label className="text-xs text-zinc-400 font-medium">Scheduled Date & Time</label>
-              <input
-                type="datetime-local"
-                value={editingItem.scheduledAt}
-                onChange={(e) => setEditingItem({ ...editingItem, scheduledAt: e.target.value })}
-                className="w-full mt-1 p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-xs"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button 
-                type="button" 
-                onClick={() => setEditingItem(null)} 
-                className="px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-xs font-medium"
-              >
-                Cancel
-              </button>
-              <button 
-                type="submit" 
-                className="px-4 py-2 rounded-xl bg-emerald-500 text-zinc-950 font-semibold text-xs"
-              >
-                Save Changes
-              </button>
-            </div>
-          </form>
         </div>
       )}
     </div>

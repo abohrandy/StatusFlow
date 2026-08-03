@@ -1,31 +1,29 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import type { StatusPost } from '@statusflow/api-client';
+import { apiClient } from '../lib/apiClient';
 
-export interface HistoryItem {
-  id: string;
-  caption: string;
-  mediaType: 'IMAGE' | 'VIDEO' | 'TEXT';
-  deliveredAt: string;
-  status: 'DELIVERED' | 'FAILED' | 'SCHEDULED';
-  viewsCount: number;
-  logDetails: string;
-}
-
-const INITIAL_HISTORY: HistoryItem[] = [
-  { id: 'hist_1', caption: 'Flash Sale Alert! 30% Off Storewide Today Only 🔥', mediaType: 'IMAGE', deliveredAt: '2026-07-28 09:30 AM', status: 'DELIVERED', viewsCount: 142, logDetails: 'Socket publish ack received. Message ID: 3EB0F89A. Broadcast target: status@broadcast.' },
-  { id: 'hist_2', caption: 'Product Launch Teaser Video 🎥', mediaType: 'VIDEO', deliveredAt: '2026-07-27 06:15 PM', status: 'DELIVERED', viewsCount: 289, logDetails: 'Socket publish ack received. Message ID: 3EB0F91B. Media size: 8.5MB.' },
-  { id: 'hist_3', caption: 'System Maintenance Notice 🛠️', mediaType: 'TEXT', deliveredAt: '2026-07-26 10:00 AM', status: 'FAILED', viewsCount: 0, logDetails: 'ERR: Socket connection lost during publish. DisconnectReason: 401 Unauthorized.' }
-];
+type HistoryStatus = 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
 export const HistoryAndCalendar: React.FC = () => {
   const [tab, setTab] = useState<'HISTORY' | 'CALENDAR'>('CALENDAR');
   const [calendarMode, setCalendarMode] = useState<'MONTHLY' | 'WEEKLY' | 'DAILY'>('MONTHLY');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'DELIVERED' | 'FAILED' | 'SCHEDULED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | HistoryStatus>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedLog, setSelectedLog] = useState<HistoryItem | null>(null);
+  const [selectedLog, setSelectedLog] = useState<StatusPost | null>(null);
+  const [history, setHistory] = useState<StatusPost[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredHistory = INITIAL_HISTORY.filter(item => {
+  useEffect(() => {
+    apiClient
+      .listPostHistory()
+      .then(({ posts }) => setHistory(posts ?? []))
+      .catch(() => setHistory([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filteredHistory = history.filter(item => {
     const matchesFilter = statusFilter === 'ALL' || item.status === statusFilter;
-    const matchesSearch = item.caption.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (item.caption ?? '').toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 
@@ -104,16 +102,6 @@ export const HistoryAndCalendar: React.FC = () => {
                     className="h-12 sm:h-20 md:h-24 p-1 sm:p-2 rounded-lg sm:rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col justify-between hover:border-emerald-500/50 transition-all cursor-pointer"
                   >
                     <span className="text-[9px] sm:text-[11px] font-semibold text-zinc-400">{day}</span>
-                    {day === 28 && (
-                      <>
-                        {/* Full detail on larger screens; a plain dot on phones where there's no room */}
-                        <div className="hidden sm:block p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] space-y-0.5">
-                          <div className="font-bold truncate">09:30 AM - Image</div>
-                          <div className="text-[9px] text-zinc-400">Drag to Reschedule</div>
-                        </div>
-                        <span className="sm:hidden self-end w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      </>
-                    )}
                   </div>
                 ))}
               </div>
@@ -128,12 +116,6 @@ export const HistoryAndCalendar: React.FC = () => {
               {['Sun 26', 'Mon 27', 'Tue 28', 'Wed 29', 'Thu 30', 'Fri 31', 'Sat 01'].map((dayStr, i) => (
                 <div key={i} className="min-w-[140px] sm:min-w-0 flex-1 sm:flex-none p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3 min-h-[280px]">
                   <div className="text-xs font-bold text-white border-b border-zinc-800 pb-2">{dayStr}</div>
-                  {i === 2 && (
-                    <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs space-y-1">
-                      <div className="font-bold">02:30 PM</div>
-                      <div className="text-[11px] text-zinc-300">Flash Sale Alert</div>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -141,14 +123,12 @@ export const HistoryAndCalendar: React.FC = () => {
 
           {calendarMode === 'DAILY' && (
             <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-4">
-              <div className="text-sm font-bold text-white">Daily Schedule Overview (July 28, 2026)</div>
+              <div className="text-sm font-bold text-white">Daily Schedule Overview</div>
               <div className="space-y-2">
                 {[9, 12, 14, 18, 21].map(hour => (
                   <div key={hour} className="flex items-center gap-4 py-2 border-b border-zinc-800/60 text-xs">
                     <span className="w-16 font-mono text-zinc-400">{hour}:00</span>
-                    <div className="flex-1 p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300">
-                      {hour === 14 ? 'Flash Sale Alert! 30% Off Storewide Today Only 🔥' : 'No posts scheduled'}
-                    </div>
+                    <div className="flex-1 p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300">No posts scheduled</div>
                   </div>
                 ))}
               </div>
@@ -162,7 +142,7 @@ export const HistoryAndCalendar: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             {/* Filter Pills */}
             <div className="flex gap-2 overflow-x-auto w-full sm:w-auto">
-              {(['ALL', 'DELIVERED', 'FAILED', 'SCHEDULED'] as const).map(status => (
+              {(['ALL', 'COMPLETED', 'FAILED', 'CANCELLED'] as const).map(status => (
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status)}
@@ -186,38 +166,43 @@ export const HistoryAndCalendar: React.FC = () => {
           </div>
 
           {/* History Log List */}
-          <div className="space-y-3">
-            {filteredHistory.map(item => (
-              <div key={item.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <span className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center">
-                    {item.mediaType}
-                  </span>
-                  <div>
-                    <div className="text-sm font-medium text-white max-w-md truncate">{item.caption}</div>
-                    <div className="text-xs text-zinc-400 mt-1 flex items-center gap-3">
-                      <span>🕒 {item.deliveredAt}</span>
-                      <span>👁️ {item.viewsCount} views</span>
+          {loading ? (
+            <div className="text-sm text-zinc-500 py-8 text-center">Loading history...</div>
+          ) : filteredHistory.length === 0 ? (
+            <div className="text-sm text-zinc-500 py-8 text-center">No posting history yet.</div>
+          ) : (
+            <div className="space-y-3">
+              {filteredHistory.map(item => (
+                <div key={item.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <span className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center">
+                      {item.mediaType}
+                    </span>
+                    <div>
+                      <div className="text-sm font-medium text-white max-w-md truncate">{item.caption || '(no caption)'}</div>
+                      <div className="text-xs text-zinc-400 mt-1 flex items-center gap-3">
+                        <span>🕒 {new Date(item.scheduledAt).toLocaleString()}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-3">
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-mono ${
-                    item.status === 'DELIVERED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                  }`}>
-                    {item.status}
-                  </span>
-                  <button
-                    onClick={() => setSelectedLog(item)}
-                    className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium border border-zinc-700"
-                  >
-                    View Logs
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-mono ${
+                      item.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                    }`}>
+                      {item.status}
+                    </span>
+                    <button
+                      onClick={() => setSelectedLog(item)}
+                      className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium border border-zinc-700"
+                    >
+                      View Logs
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -232,9 +217,9 @@ export const HistoryAndCalendar: React.FC = () => {
 
             <div className="space-y-2 text-xs">
               <div className="text-zinc-400">Post ID: <span className="font-mono text-white">{selectedLog.id}</span></div>
-              <div className="text-zinc-400">Delivered: <span className="text-white">{selectedLog.deliveredAt}</span></div>
+              <div className="text-zinc-400">Scheduled: <span className="text-white">{new Date(selectedLog.scheduledAt).toLocaleString()}</span></div>
               <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 font-mono text-[11px] text-zinc-300 leading-relaxed">
-                {selectedLog.logDetails}
+                {selectedLog.errorMessage ?? 'Published successfully via WhatsApp status broadcast.'}
               </div>
             </div>
 

@@ -8,6 +8,8 @@
   },
   "dependencies": {
     "pg": "^8.11.3",
+    "bullmq": "^5.12.0",
+    "ioredis": "^5.4.1",
     "@statusflow/baileys-engine": "workspace:*",
     "@statusflow/subscriptions": "workspace:*",
     "@statusflow/types": "workspace:*",

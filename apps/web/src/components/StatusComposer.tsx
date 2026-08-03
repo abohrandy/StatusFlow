@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ApiError } from '@statusflow/api-client';
+import React, { useEffect, useState } from 'react';
+import { ApiError, type MediaFile } from '@statusflow/api-client';
 import { apiClient } from '../lib/apiClient';
 import { FreeQuotaModal } from './modals/FreeQuotaModal';
 
@@ -14,12 +14,35 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
   const [statusType, setStatusType] = useState<'TEXT' | 'IMAGE' | 'VIDEO'>('IMAGE');
   const [caption, setCaption] = useState('');
   const [bgColor, setBgColor] = useState('#128C7E');
-  const [selectedMediaUrl, setSelectedMediaUrl] = useState<string>('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500');
+  const [selectedMediaUrl, setSelectedMediaUrl] = useState<string | null>(null);
   const [scheduledTime, setScheduledTime] = useState('');
   const [showMediaModal, setShowMediaModal] = useState(false);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [saveStatusMessage, setSaveStatusMessage] = useState<string | null>(null);
   const [checkingQuota, setCheckingQuota] = useState(false);
+  const [mediaLibrary, setMediaLibrary] = useState<MediaFile[]>([]);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+
+  useEffect(() => {
+    apiClient.listMedia().then(({ media }) => setMediaLibrary(media ?? [])).catch(() => setMediaLibrary([]));
+  }, []);
+
+  const handleUploadInModal = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingMedia(true);
+    try {
+      const { media } = await apiClient.uploadMedia(file);
+      setMediaLibrary(prev => [media, ...prev]);
+      setSelectedMediaUrl(media.fileUrl);
+      setShowMediaModal(false);
+    } catch {
+      // Modal stays open so the user can retry.
+    } finally {
+      setUploadingMedia(false);
+      e.target.value = '';
+    }
+  };
 
   const handleAddEmoji = (emoji: string) => {
     setCaption(prev => prev + emoji);
@@ -32,16 +55,28 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
 
   const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (statusType !== 'TEXT' && !selectedMediaUrl) {
+      setSaveStatusMessage('Select or upload a media asset first.');
+      setTimeout(() => setSaveStatusMessage(null), 3000);
+      return;
+    }
     setCheckingQuota(true);
     try {
-      await apiClient.checkScheduleAllowed();
+      await apiClient.createStatusPost({
+        mediaType: statusType,
+        caption: caption || undefined,
+        mediaUrl: statusType !== 'TEXT' ? selectedMediaUrl ?? undefined : undefined,
+        scheduledAt: new Date(scheduledTime).toISOString(),
+      });
+      setCaption('');
+      setScheduledTime('');
       setSaveStatusMessage('Status scheduled successfully and added to queue!');
       setTimeout(() => setSaveStatusMessage(null), 3000);
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
         setShowQuotaModal(true);
       } else {
-        setSaveStatusMessage('Could not schedule status right now. Please try again.');
+        setSaveStatusMessage(err instanceof ApiError ? err.message : 'Could not schedule status right now. Please try again.');
         setTimeout(() => setSaveStatusMessage(null), 3000);
       }
     } finally {
@@ -100,10 +135,14 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
             <div>
               <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Status Media Asset</label>
               <div className="flex items-center gap-4 p-4 rounded-xl bg-zinc-950 border border-zinc-800">
-                <img src={selectedMediaUrl} alt="Selected Media" className="w-16 h-16 object-cover rounded-lg border border-zinc-800" />
+                {selectedMediaUrl ? (
+                  <img src={selectedMediaUrl} alt="Selected Media" className="w-16 h-16 object-cover rounded-lg border border-zinc-800" />
+                ) : (
+                  <div className="w-16 h-16 rounded-lg border border-dashed border-zinc-700 flex items-center justify-center text-zinc-500 text-xs">None</div>
+                )}
                 <div className="space-y-1">
-                  <div className="text-xs font-medium text-white">Attached Asset</div>
-                  <button 
+                  <div className="text-xs font-medium text-white">{selectedMediaUrl ? 'Attached Asset' : 'No asset selected'}</div>
+                  <button
                     type="button"
                     onClick={() => setShowMediaModal(true)}
                     className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-medium transition-all"
@@ -205,10 +244,10 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
               style={{ backgroundColor: statusType === 'TEXT' ? bgColor : '#000000' }}
             >
               {/* Media Background for IMAGE / VIDEO */}
-              {statusType !== 'TEXT' && (
-                <img 
-                  src={selectedMediaUrl} 
-                  alt="Status Preview" 
+              {statusType !== 'TEXT' && selectedMediaUrl && (
+                <img
+                  src={selectedMediaUrl}
+                  alt="Status Preview"
                   className="absolute inset-0 w-full h-full object-cover opacity-90"
                 />
               )}
@@ -246,21 +285,29 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
               <button onClick={() => setShowMediaModal(false)} className="text-zinc-400 hover:text-white text-lg">×</button>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 max-h-64 overflow-y-auto p-1">
-              {[
-                'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500',
-                'https://images.unsplash.com/photo-1536240478700-b869070f9279?w=500',
-                'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=500'
-              ].map((url, i) => (
-                <img
-                  key={i}
-                  src={url}
-                  alt="Asset"
-                  onClick={() => { setSelectedMediaUrl(url); setShowMediaModal(false); }}
-                  className="w-full h-24 object-cover rounded-xl border border-zinc-800 hover:border-emerald-500 cursor-pointer transition-all"
-                />
-              ))}
-            </div>
+            <label className="w-full px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-medium transition-all cursor-pointer flex items-center justify-center gap-2">
+              {uploadingMedia ? 'Uploading...' : '📤 Upload New Asset'}
+              <input type="file" accept="image/*,video/*" onChange={handleUploadInModal} disabled={uploadingMedia} className="hidden" />
+            </label>
+
+            {mediaLibrary.length === 0 ? (
+              <div className="text-xs text-zinc-500 text-center py-6">
+                Your media library is empty — upload an asset above to attach it.
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-3 max-h-64 overflow-y-auto p-1">
+                {mediaLibrary.map((item) => (
+                  <img
+                    key={item.id}
+                    src={item.fileUrl}
+                    alt={item.fileName}
+                    title={item.fileName}
+                    onClick={() => { setSelectedMediaUrl(item.fileUrl); setShowMediaModal(false); }}
+                    className="w-full h-24 object-cover rounded-xl border border-zinc-800 hover:border-emerald-500 cursor-pointer transition-all"
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

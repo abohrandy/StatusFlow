@@ -1,83 +1,58 @@
-import React, { useState } from 'react';
-
-export interface MediaItem {
-  id: string;
-  fileName: string;
-  fileUrl: string;
-  fileSizeMb: number;
-  mimeType: string;
-  createdAt: string;
-  type: 'IMAGE' | 'VIDEO';
-}
-
-const INITIAL_MEDIA: MediaItem[] = [
-  { id: '1', fileName: 'summer_promo_banner.jpg', fileUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500', fileSizeMb: 1.2, mimeType: 'image/jpeg', createdAt: '2026-07-28', type: 'IMAGE' },
-  { id: '2', fileName: 'product_demo_reel.mp4', fileUrl: 'https://images.unsplash.com/photo-1536240478700-b869070f9279?w=500', fileSizeMb: 8.5, mimeType: 'video/mp4', createdAt: '2026-07-27', type: 'VIDEO' },
-  { id: '3', fileName: 'store_announcement.png', fileUrl: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=500', fileSizeMb: 2.4, mimeType: 'image/png', createdAt: '2026-07-25', type: 'IMAGE' }
-];
+import React, { useEffect, useState } from 'react';
+import type { MediaFile } from '@statusflow/api-client';
+import { apiClient } from '../lib/apiClient';
 
 export const MediaLibrary: React.FC = () => {
-  const [mediaList, setMediaList] = useState<MediaItem[]>(INITIAL_MEDIA);
+  const [mediaList, setMediaList] = useState<MediaFile[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
+  const [selectedItem, setSelectedItem] = useState<MediaFile | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [newFileName, setNewFileName] = useState('');
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiClient
+      .listMedia()
+      .then(({ media }) => setMediaList(media ?? []))
+      .catch(() => setMediaList([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   // Storage Stats Calculation
   const totalStorageMb = 5000;
-  const usedStorageMb = mediaList.reduce((acc, item) => acc + item.fileSizeMb, 0) + 2100; // include existing S3 usage
-  const usedPercentage = Math.round((usedStorageMb / totalStorageMb) * 100);
+  const usedStorageMb = mediaList.reduce((acc, item) => acc + item.fileSize / (1024 * 1024), 0);
+  const usedPercentage = Math.min(100, Math.round((usedStorageMb / totalStorageMb) * 100));
 
-  // Search & Pagination Filter
-  const filteredMedia = mediaList.filter(item => 
+  const filteredMedia = mediaList.filter(item =>
     item.fileName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSimulatedUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-
     const file = files[0];
+
     setIsUploading(true);
-    setUploadProgress(10);
-
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsUploading(false);
-          
-          const newMedia: MediaItem = {
-            id: Date.now().toString(),
-            fileName: file.name,
-            fileUrl: file.type.startsWith('video') 
-              ? 'https://images.unsplash.com/photo-1536240478700-b869070f9279?w=500'
-              : URL.createObjectURL(file),
-            fileSizeMb: Number((file.size / (1024 * 1024)).toFixed(1)) || 1.5,
-            mimeType: file.type || 'image/jpeg',
-            createdAt: new Date().toISOString().split('T')[0],
-            type: file.type.startsWith('video') ? 'VIDEO' : 'IMAGE'
-          };
-          setMediaList(prevList => [newMedia, ...prevList]);
-          return 0;
-        }
-        return prev + 30;
-      });
-    }, 300);
+    setUploadError(null);
+    try {
+      const { media } = await apiClient.uploadMedia(file);
+      setMediaList(prev => [media, ...prev]);
+    } catch {
+      setUploadError('Upload failed. Please try again.');
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setMediaList(prev => prev.filter(m => m.id !== id));
-    if (selectedItem?.id === id) setSelectedItem(null);
-  };
-
-  const handleRename = (id: string) => {
-    if (!newFileName.trim()) return;
-    setMediaList(prev => prev.map(m => m.id === id ? { ...m, fileName: newFileName } : m));
-    setEditingId(null);
-    setNewFileName('');
+  const handleDelete = async (id: string) => {
+    try {
+      await apiClient.deleteMedia(id);
+      setMediaList(prev => prev.filter(m => m.id !== id));
+      if (selectedItem?.id === id) setSelectedItem(null);
+    } catch {
+      setUploadError('Could not delete this file. Please try again.');
+    }
   };
 
   return (
@@ -91,7 +66,7 @@ export const MediaLibrary: React.FC = () => {
 
         <div className="w-full md:w-72 p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2">
           <div className="flex justify-between text-xs text-zinc-400 font-medium">
-            <span>S3 Media Storage</span>
+            <span>Media Storage</span>
             <span className="text-emerald-400">{usedPercentage}% Used</span>
           </div>
           <div className="text-sm font-bold text-white">
@@ -108,11 +83,12 @@ export const MediaLibrary: React.FC = () => {
         {/* Upload Zone Button */}
         <label className="w-full sm:w-auto px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-semibold text-sm transition-all shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center justify-center gap-2">
           <span>📤</span> Upload Media File
-          <input 
-            type="file" 
-            accept="image/*,video/*" 
-            onChange={handleSimulatedUpload} 
-            className="hidden" 
+          <input
+            type="file"
+            accept="image/*,video/*"
+            onChange={handleUpload}
+            disabled={isUploading}
+            className="hidden"
           />
         </label>
 
@@ -128,21 +104,22 @@ export const MediaLibrary: React.FC = () => {
         </div>
       </div>
 
-      {/* Upload Progress Bar */}
+      {/* Upload Progress / Error */}
       {isUploading && (
-        <div className="p-4 rounded-xl bg-zinc-900 border border-emerald-500/30 space-y-2 animate-pulse">
-          <div className="flex justify-between text-xs font-medium text-white">
-            <span>Uploading asset to S3 Storage...</span>
-            <span className="text-emerald-400">{uploadProgress}%</span>
-          </div>
-          <div className="w-full bg-zinc-950 h-2 rounded-full overflow-hidden">
-            <div className="bg-emerald-500 h-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
-          </div>
+        <div className="p-4 rounded-xl bg-zinc-900 border border-emerald-500/30 text-sm text-emerald-400 text-center animate-pulse">
+          Uploading asset...
+        </div>
+      )}
+      {uploadError && (
+        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400 text-center">
+          {uploadError}
         </div>
       )}
 
       {/* Media Grid Display */}
-      {filteredMedia.length === 0 ? (
+      {loading ? (
+        <div className="py-16 text-center text-sm text-zinc-500">Loading your media library...</div>
+      ) : filteredMedia.length === 0 ? (
         <div className="py-16 text-center border-2 border-dashed border-zinc-800 rounded-2xl space-y-2">
           <div className="text-2xl">🖼️</div>
           <div className="text-sm font-semibold text-white">No media assets found</div>
@@ -154,52 +131,26 @@ export const MediaLibrary: React.FC = () => {
             <div key={item.id} className="group relative rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden hover:border-zinc-700 transition-all flex flex-col justify-between">
               {/* Media Thumbnail */}
               <div className="relative h-44 bg-zinc-950 overflow-hidden cursor-pointer" onClick={() => setSelectedItem(item)}>
-                <img 
-                  src={item.fileUrl} 
-                  alt={item.fileName} 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                <img
+                  src={item.fileUrl}
+                  alt={item.fileName}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <span className="absolute top-3 left-3 px-2 py-0.5 rounded-full bg-zinc-950/80 backdrop-blur-md text-zinc-300 text-[10px] font-mono border border-zinc-800">
-                  {item.type}
+                  {item.mimeType.startsWith('video') ? 'VIDEO' : 'IMAGE'}
                 </span>
                 <span className="absolute bottom-3 right-3 px-2 py-0.5 rounded-full bg-zinc-950/80 backdrop-blur-md text-zinc-300 text-[10px]">
-                  {item.fileSizeMb} MB
+                  {(item.fileSize / (1024 * 1024)).toFixed(1)} MB
                 </span>
               </div>
 
               {/* Item Info & Actions */}
               <div className="p-4 space-y-3">
-                {editingId === item.id ? (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newFileName}
-                      onChange={(e) => setNewFileName(e.target.value)}
-                      className="w-full px-2 py-1 bg-zinc-950 border border-zinc-700 rounded text-xs text-white"
-                      placeholder={item.fileName}
-                    />
-                    <button 
-                      onClick={() => handleRename(item.id)}
-                      className="px-2 py-1 bg-emerald-500 text-zinc-950 font-bold text-xs rounded"
-                    >
-                      Save
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-xs font-semibold text-white truncate" title={item.fileName}>{item.fileName}</div>
-                    <button 
-                      onClick={() => { setEditingId(item.id); setNewFileName(item.fileName); }}
-                      className="text-zinc-500 hover:text-zinc-300 text-xs"
-                    >
-                      ✏️
-                    </button>
-                  </div>
-                )}
+                <div className="text-xs font-semibold text-white truncate" title={item.fileName}>{item.fileName}</div>
 
                 <div className="flex justify-between items-center text-[11px] text-zinc-500 pt-2 border-t border-zinc-800/60">
-                  <span>Uploaded {item.createdAt}</span>
-                  <button 
+                  <span>Uploaded {new Date(item.createdAt).toLocaleDateString()}</span>
+                  <button
                     onClick={() => handleDelete(item.id)}
                     className="text-red-400 hover:text-red-300 font-medium hover:underline"
                   >
@@ -227,12 +178,12 @@ export const MediaLibrary: React.FC = () => {
 
             <div className="flex justify-between items-center text-xs text-zinc-400">
               <div>Type: <span className="text-white font-medium">{selectedItem.mimeType}</span></div>
-              <div>Size: <span className="text-white font-medium">{selectedItem.fileSizeMb} MB</span></div>
-              <div>Date: <span className="text-white font-medium">{selectedItem.createdAt}</span></div>
+              <div>Size: <span className="text-white font-medium">{(selectedItem.fileSize / (1024 * 1024)).toFixed(1)} MB</span></div>
+              <div>Date: <span className="text-white font-medium">{new Date(selectedItem.createdAt).toLocaleDateString()}</span></div>
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
-              <button 
+              <button
                 onClick={() => setSelectedItem(null)}
                 className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-medium"
               >

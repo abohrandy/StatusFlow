@@ -194,9 +194,9 @@ billingRouter.get('/subscriptions/history', asyncHandler(async (req, res) => {
 /**
  * Lets the composer check the Free plan's 7-day scheduling quota BEFORE attempting to
  * schedule a status, so the UI can show the upgrade modal instead of a raw error. Reuses
- * `assertCanScheduleStatus` from @statusflow/subscriptions — the exact same check the
- * (future) posting endpoint and the `requireScheduleQuota` middleware use — so this can
- * never drift out of sync with the real enforcement.
+ * `assertCanScheduleStatus` from @statusflow/subscriptions — the exact same check
+ * `POST /posts` (via the `requireScheduleQuota` middleware) uses — so this can never
+ * drift out of sync with the real enforcement.
  */
 billingRouter.post('/schedule-check', asyncHandler(async (req, res) => {
   const sub = await getActiveSubscription(req.user!.id);
@@ -204,7 +204,7 @@ billingRouter.post('/schedule-check', asyncHandler(async (req, res) => {
 
   const [result, accountCreatedAt] = await Promise.all([
     pool.query<{ last: string | null }>(
-      `SELECT MAX(scheduled_at) AS last FROM status_posts WHERE user_id = $1 AND status <> 'FAILED'`,
+      `SELECT MAX(scheduled_at) AS last FROM status_posts WHERE user_id = $1 AND status NOT IN ('FAILED', 'CANCELLED')`,
       [req.user!.id],
     ),
     getUserCreatedAt(req.user!.id),

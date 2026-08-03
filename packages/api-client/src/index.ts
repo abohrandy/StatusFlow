@@ -5,6 +5,33 @@ export interface ApiClientOptions {
   getAuthToken?: () => Promise<string | null | undefined>;
 }
 
+export interface StatusPost {
+  id: string;
+  mediaType: 'TEXT' | 'IMAGE' | 'VIDEO';
+  caption: string | null;
+  mediaUrl: string | null;
+  scheduledAt: string;
+  status: 'DRAFT' | 'SCHEDULED' | 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  errorMessage: string | null;
+  createdAt: string;
+}
+
+export interface CreateStatusPostInput {
+  mediaType: StatusPost['mediaType'];
+  scheduledAt: string;
+  caption?: string;
+  mediaUrl?: string;
+}
+
+export interface MediaFile {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  fileSize: number;
+  mimeType: string;
+  createdAt: string;
+}
+
 export class ApiError extends Error {
   status: number;
   body: any;
@@ -34,6 +61,21 @@ export class ApiClient {
     if (token) headers.Authorization = `Bearer ${token}`;
 
     const res = await fetch(`${this.baseUrl}${path}`, { ...init, headers });
+    const body = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new ApiError(body?.error || `Request to ${path} failed with status ${res.status}`, res.status, body);
+    }
+    return body as T;
+  }
+
+  /** Like `request`, but for multipart bodies — omits the JSON Content-Type so `fetch` can set its own boundary. */
+  private async requestFormData<T>(path: string, formData: FormData, init: RequestInit = {}): Promise<T> {
+    const token = await this.getAuthToken?.();
+    const headers: Record<string, string> = { ...(init.headers as Record<string, string> | undefined) };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(`${this.baseUrl}${path}`, { ...init, method: init.method ?? 'POST', headers, body: formData });
     const body = await res.json().catch(() => ({}));
 
     if (!res.ok) {
@@ -86,6 +128,41 @@ export class ApiClient {
   /** Resolves `{allowed:true}` or throws `ApiError` (status 403, body carries the subscription error) if the Free plan's quota is exhausted. */
   checkScheduleAllowed() {
     return this.request<{ allowed: true }>('/billing/schedule-check', { method: 'POST' });
+  }
+
+  // --- Posts ---------------------------------------------------------------
+
+  createStatusPost(payload: CreateStatusPostInput) {
+    return this.request<{ post: StatusPost }>('/posts', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  listScheduledPosts() {
+    return this.request<{ posts: StatusPost[] }>('/posts');
+  }
+
+  listPostHistory() {
+    return this.request<{ posts: StatusPost[] }>('/posts/history');
+  }
+
+  /** Only succeeds while the post is still DRAFT/SCHEDULED/QUEUED — throws `ApiError` (404) once it's sending or resolved. */
+  cancelStatusPost(id: string) {
+    return this.request<{ post: StatusPost }>(`/posts/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+  }
+
+  // --- Media ---------------------------------------------------------------
+
+  uploadMedia(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.requestFormData<{ media: MediaFile }>('/media', formData);
+  }
+
+  listMedia() {
+    return this.request<{ media: MediaFile[] }>('/media');
+  }
+
+  deleteMedia(id: string) {
+    return this.request<{ ok: boolean }>(`/media/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 
   // --- Referrals ---------------------------------------------------------------

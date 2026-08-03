@@ -1,1 +1,2 @@
-export * from './BaileysManager';
+export * from './WhatsAppConnection';
+export * from './redisAuthState';

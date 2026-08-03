@@ -1,27 +1,34 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Badge, BottomSheet, Card, EmptyState, SegmentedControl, TopAppBar } from '../../components';
 import { Colors, Radius, Spacing, Typography } from '../../theme';
+import { apiClient } from '../../lib/apiClient';
 
-export interface MobileScheduleItem {
+export interface QueuedPost {
   id: string;
-  caption: string;
+  caption: string | null;
   mediaType: 'TEXT' | 'IMAGE' | 'VIDEO';
-  scheduledTime: string;
-  timezone: string;
-  status: 'SCHEDULED' | 'QUEUED' | 'COMPLETED' | 'FAILED';
+  scheduledAt: string;
+  status: 'DRAFT' | 'SCHEDULED' | 'QUEUED' | 'PROCESSING';
 }
 
 export default function ScheduledQueueScreen() {
   const router = useRouter();
   const [view, setView] = useState<'list' | 'calendar'>('list');
-  const [schedules, setSchedules] = useState<MobileScheduleItem[]>([
-    { id: 'sch_1', caption: 'Flash Sale Alert! 30% Off Storewide Today Only', mediaType: 'IMAGE', scheduledTime: 'Today at 02:30 PM', timezone: 'WAT (UTC+1)', status: 'QUEUED' },
-    { id: 'sch_2', caption: 'New Product Unboxing Video', mediaType: 'VIDEO', scheduledTime: 'Tomorrow at 09:00 AM', timezone: 'WAT (UTC+1)', status: 'SCHEDULED' },
-  ]);
-  const [selectedItem, setSelectedItem] = useState<MobileScheduleItem | null>(null);
+  const [schedules, setSchedules] = useState<QueuedPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedItem, setSelectedItem] = useState<QueuedPost | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+
+  useEffect(() => {
+    apiClient
+      .get('/posts')
+      .then(({ data }) => setSchedules(data.posts ?? []))
+      .catch(() => setSchedules([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleCancelSchedule = (id: string) => {
     Alert.alert('Cancel Schedule', 'Are you sure you want to cancel this scheduled status broadcast?', [
@@ -29,24 +36,20 @@ export default function ScheduledQueueScreen() {
       {
         text: 'Cancel Post',
         style: 'destructive',
-        onPress: () => {
-          setSchedules((prev) => prev.filter((s) => s.id !== id));
-          setSelectedItem(null);
+        onPress: async () => {
+          setCancelling(true);
+          try {
+            await apiClient.post(`/posts/${id}/cancel`);
+            setSchedules((prev) => prev.filter((s) => s.id !== id));
+            setSelectedItem(null);
+          } catch (err: any) {
+            Alert.alert('Could not cancel', err?.response?.data?.error ?? 'Please try again.');
+          } finally {
+            setCancelling(false);
+          }
         },
       },
     ]);
-  };
-
-  const handleDuplicateSchedule = (item: MobileScheduleItem) => {
-    const newItem: MobileScheduleItem = {
-      ...item,
-      id: `sch_${Date.now()}`,
-      caption: `[Copy] ${item.caption}`,
-      scheduledTime: 'Tomorrow at 06:00 PM',
-      status: 'SCHEDULED',
-    };
-    setSchedules((prev) => [newItem, ...prev]);
-    setSelectedItem(null);
   };
 
   return (
@@ -71,7 +74,9 @@ export default function ScheduledQueueScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {schedules.length === 0 ? (
+        {loading ? (
+          <Text style={styles.loadingLabel}>Loading your scheduled posts...</Text>
+        ) : schedules.length === 0 ? (
           <EmptyState icon="schedule" title="No scheduled statuses" subtitle="Schedule your first WhatsApp status from the Create button." />
         ) : (
           <View style={styles.list}>
@@ -82,14 +87,13 @@ export default function ScheduledQueueScreen() {
                   <Badge label={item.status} variant={item.status === 'QUEUED' ? 'neutral' : 'warning'} />
                 </View>
                 <Text style={styles.caption} numberOfLines={2}>
-                  {item.caption}
+                  {item.caption || '(no caption)'}
                 </Text>
                 <View style={styles.itemFooter}>
                   <View style={styles.timeRow}>
                     <MaterialIcons name="schedule" size={14} color={Colors.onSurfaceVariant} />
-                    <Text style={styles.timeLabel}>{item.scheduledTime}</Text>
+                    <Text style={styles.timeLabel}>{new Date(item.scheduledAt).toLocaleString()}</Text>
                   </View>
-                  <Text style={styles.tzLabel}>{item.timezone}</Text>
                 </View>
               </Card>
             ))}
@@ -102,20 +106,17 @@ export default function ScheduledQueueScreen() {
           <View style={styles.sheetContent}>
             <Text style={styles.sheetTitle}>Manage Scheduled Status</Text>
             <Text style={styles.sheetCaption} numberOfLines={2}>
-              {selectedItem.caption}
+              {selectedItem.caption || '(no caption)'}
             </Text>
-            <Text style={styles.sheetTime}>
-              {selectedItem.scheduledTime} • {selectedItem.timezone}
-            </Text>
+            <Text style={styles.sheetTime}>{new Date(selectedItem.scheduledAt).toLocaleString()}</Text>
 
-            <Pressable style={styles.actionButton} onPress={() => handleDuplicateSchedule(selectedItem)}>
-              <MaterialIcons name="content-copy" size={18} color={Colors.onSurface} />
-              <Text style={styles.actionLabel}>Duplicate schedule</Text>
-            </Pressable>
-
-            <Pressable style={styles.cancelButton} onPress={() => handleCancelSchedule(selectedItem.id)}>
+            <Pressable
+              style={styles.cancelButton}
+              onPress={() => handleCancelSchedule(selectedItem.id)}
+              disabled={cancelling}
+            >
               <MaterialIcons name="delete-outline" size={18} color={Colors.error} />
-              <Text style={styles.cancelLabel}>Cancel & remove</Text>
+              <Text style={styles.cancelLabel}>{cancelling ? 'Cancelling...' : 'Cancel & remove'}</Text>
             </Pressable>
 
             <Pressable style={styles.closeButton} onPress={() => setSelectedItem(null)}>
@@ -132,6 +133,12 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   toggleWrap: { padding: Spacing.marginMobile, paddingBottom: 0 },
   content: { padding: Spacing.marginMobile, paddingBottom: Spacing.xxl },
+  loadingLabel: {
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
+    textAlign: 'center',
+    marginTop: Spacing.xl,
+  },
   list: { gap: Spacing.md },
   itemCard: { gap: Spacing.sm },
   itemHeader: { flexDirection: 'row', gap: Spacing.xs },
@@ -150,10 +157,6 @@ const styles = StyleSheet.create({
     ...Typography.bodySm,
     color: Colors.onSurfaceVariant,
   },
-  tzLabel: {
-    ...Typography.labelSm,
-    color: Colors.outline,
-  },
   sheetContent: { padding: Spacing.lg, gap: Spacing.sm },
   sheetTitle: {
     ...Typography.headlineSm,
@@ -167,19 +170,6 @@ const styles = StyleSheet.create({
     ...Typography.labelSm,
     color: Colors.primary,
     marginBottom: Spacing.sm,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Colors.surfaceContainerLow,
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.lg,
-    justifyContent: 'center',
-  },
-  actionLabel: {
-    ...Typography.labelMd,
-    color: Colors.onSurface,
   },
   cancelButton: {
     flexDirection: 'row',

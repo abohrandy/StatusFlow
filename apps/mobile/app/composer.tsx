@@ -5,12 +5,38 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { SegmentedControl, TopAppBar } from '../components';
 import { Colors, Radius, Spacing, Typography } from '../theme';
+import { apiClient } from '../lib/apiClient';
 
 const SWATCHES = ['#128C7E', '#075E54', '#004ac6', '#4b41e1', '#006242', '#ba1a1a'];
 const EMOJIS = ['🔥', '🚀', '🎉', '❤️', '👏', '⚡', '✨', '💯'];
 const MAX_CAPTION_LENGTH = 700;
 
 type StatusType = 'text' | 'image' | 'video';
+
+const SCHEDULE_PRESETS: { key: string; label: string; compute: () => Date }[] = [
+  { key: 'in_1_hour', label: 'In 1 hour', compute: () => new Date(Date.now() + 60 * 60 * 1000) },
+  { key: 'in_3_hours', label: 'In 3 hours', compute: () => new Date(Date.now() + 3 * 60 * 60 * 1000) },
+  {
+    key: 'tomorrow_9am',
+    label: 'Tomorrow 9 AM',
+    compute: () => {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      d.setHours(9, 0, 0, 0);
+      return d;
+    },
+  },
+  {
+    key: 'tomorrow_6pm',
+    label: 'Tomorrow 6 PM',
+    compute: () => {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      d.setHours(18, 0, 0, 0);
+      return d;
+    },
+  },
+];
 
 export default function ComposerScreen() {
   const router = useRouter();
@@ -19,7 +45,9 @@ export default function ComposerScreen() {
   const [selectedColor, setSelectedColor] = useState(SWATCHES[0]);
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [mediaAsset, setMediaAsset] = useState<{ uri: string; fileName?: string } | null>(null);
+  const [mediaAsset, setMediaAsset] = useState<{ uri: string; fileName?: string; remoteUrl?: string } | null>(null);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [schedulePreset, setSchedulePreset] = useState(SCHEDULE_PRESETS[0].key);
 
   const handleChangeStatusType = (next: StatusType) => {
     setStatusType(next);
@@ -40,7 +68,26 @@ export default function ComposerScreen() {
     if (result.canceled || !result.assets?.length) return;
 
     const asset = result.assets[0];
-    setMediaAsset({ uri: asset.uri, fileName: asset.fileName ?? undefined });
+    const fileName = asset.fileName ?? asset.uri.split('/').pop() ?? 'media_asset';
+    const mimeType = asset.mimeType ?? (statusType === 'video' ? 'video/mp4' : 'image/jpeg');
+    setMediaAsset({ uri: asset.uri, fileName });
+
+    // Upload immediately so the worker has a real URL to publish, not a device-local
+    // path that only exists on this phone.
+    setUploadingMedia(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', { uri: asset.uri, name: fileName, type: mimeType } as any);
+      const { data } = await apiClient.post('/media', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setMediaAsset({ uri: asset.uri, fileName, remoteUrl: data.media.fileUrl });
+    } catch (err: any) {
+      Alert.alert('Upload failed', err?.response?.data?.error ?? 'Could not upload this file — please try again.');
+      setMediaAsset(null);
+    } finally {
+      setUploadingMedia(false);
+    }
   };
 
   const handleSaveDraft = () => {
@@ -52,7 +99,7 @@ export default function ComposerScreen() {
     }, 500);
   };
 
-  const handleScheduleStatus = () => {
+  const handleScheduleStatus = async () => {
     if (!caption && statusType === 'text') {
       Alert.alert('Add a caption', 'Please enter a status text caption.');
       return;
@@ -61,14 +108,33 @@ export default function ComposerScreen() {
       Alert.alert('Add media', `Please select an ${statusType} from your device first.`);
       return;
     }
+    if (statusType !== 'text' && (uploadingMedia || !mediaAsset?.remoteUrl)) {
+      Alert.alert('Still uploading', 'Wait for the media upload to finish before scheduling.');
+      return;
+    }
+
+    const scheduledAt = SCHEDULE_PRESETS.find((p) => p.key === schedulePreset)!.compute();
     setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
+    try {
+      await apiClient.post('/posts', {
+        mediaType: statusType.toUpperCase(),
+        caption: caption || undefined,
+        mediaUrl: statusType !== 'text' ? mediaAsset?.remoteUrl : undefined,
+        scheduledAt: scheduledAt.toISOString(),
+      });
       setSuccessMessage('Status scheduled successfully!');
       setCaption('');
       setMediaAsset(null);
       setTimeout(() => setSuccessMessage(null), 2000);
-    }, 800);
+    } catch (err: any) {
+      if (err?.response?.status === 403) {
+        Alert.alert('Plan limit reached', err.response?.data?.error ?? 'Upgrade your plan to schedule more statuses.');
+      } else {
+        Alert.alert('Could not schedule', err?.response?.data?.error ?? 'Please try again.');
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -142,11 +208,21 @@ export default function ComposerScreen() {
         )}
 
         {statusType !== 'text' && (
-          <Pressable style={styles.uploadZone} onPress={handlePickMedia}>
-            <MaterialIcons name={mediaAsset ? 'check-circle' : 'upload-file'} size={28} color={Colors.primary} />
-            <Text style={styles.uploadTitle}>{mediaAsset ? 'Media selected — tap to change' : 'Tap to select media'}</Text>
+          <Pressable style={styles.uploadZone} onPress={handlePickMedia} disabled={uploadingMedia}>
+            <MaterialIcons
+              name={uploadingMedia ? 'cloud-upload' : mediaAsset?.remoteUrl ? 'check-circle' : 'upload-file'}
+              size={28}
+              color={Colors.primary}
+            />
+            <Text style={styles.uploadTitle}>
+              {uploadingMedia ? 'Uploading...' : mediaAsset?.remoteUrl ? 'Media selected — tap to change' : 'Tap to select media'}
+            </Text>
             <Text style={styles.uploadSubtitle}>
-              {mediaAsset ? mediaAsset.fileName ?? 'Ready to schedule' : 'Choose a photo or video from your device'}
+              {uploadingMedia
+                ? mediaAsset?.fileName ?? 'Please wait'
+                : mediaAsset?.remoteUrl
+                ? mediaAsset.fileName ?? 'Ready to schedule'
+                : 'Choose a photo or video from your device'}
             </Text>
           </Pressable>
         )}
@@ -174,13 +250,31 @@ export default function ComposerScreen() {
             ))}
           </View>
         </View>
+
+        <View style={styles.scheduleGroup}>
+          <Text style={styles.label}>WHEN TO POST</Text>
+          <View style={styles.presetRow}>
+            {SCHEDULE_PRESETS.map((preset) => (
+              <Pressable
+                key={preset.key}
+                onPress={() => setSchedulePreset(preset.key)}
+                style={[styles.presetChip, schedulePreset === preset.key && styles.presetChipSelected]}
+              >
+                <Text style={[styles.presetLabel, schedulePreset === preset.key && styles.presetLabelSelected]}>{preset.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.scheduleResolved}>
+            Will publish {SCHEDULE_PRESETS.find((p) => p.key === schedulePreset)!.compute().toLocaleString()}
+          </Text>
+        </View>
       </ScrollView>
 
       <View style={styles.actionBar}>
         <Pressable onPress={handleSaveDraft} disabled={saving}>
           <Text style={styles.draftLabel}>Save Draft</Text>
         </Pressable>
-        <Pressable style={styles.scheduleButton} onPress={handleScheduleStatus} disabled={saving}>
+        <Pressable style={styles.scheduleButton} onPress={handleScheduleStatus} disabled={saving || uploadingMedia}>
           <MaterialIcons name="schedule" size={18} color={Colors.onPrimary} />
           <Text style={styles.scheduleLabel}>{saving ? 'Scheduling...' : 'Schedule Status'}</Text>
         </Pressable>
@@ -299,6 +393,31 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
   },
   emoji: { fontSize: 20 },
+  scheduleGroup: { gap: Spacing.sm },
+  presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  presetChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    backgroundColor: Colors.surfaceContainerLow,
+  },
+  presetChipSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  presetLabel: {
+    ...Typography.labelSm,
+    color: Colors.onSurfaceVariant,
+  },
+  presetLabelSelected: {
+    color: Colors.onPrimary,
+  },
+  scheduleResolved: {
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
+  },
   actionBar: {
     flexDirection: 'row',
     alignItems: 'center',

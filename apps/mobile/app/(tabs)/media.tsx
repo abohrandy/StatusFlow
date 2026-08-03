@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View, type DimensionValue } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { BottomSheet, EmptyState, TopAppBar } from '../../components';
 import { Colors, Radius, Spacing, Typography } from '../../theme';
+import { apiClient } from '../../lib/apiClient';
 
 export interface MobileMediaFile {
   id: string;
   fileName: string;
   fileUrl: string;
-  fileSizeMb: number;
+  fileSize: number;
   mimeType: string;
 }
 
@@ -25,20 +26,29 @@ function useMediaColumnWidth(): DimensionValue {
 
 export default function MediaLibraryScreen() {
   const cardWidth = useMediaColumnWidth();
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [selectedFile, setSelectedFile] = useState<MobileMediaFile | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [mediaList, setMediaList] = useState<MobileMediaFile[]>([
-    { id: 'm1', fileName: 'promo_banner.png', fileUrl: 'https://picsum.photos/400/400?random=1', fileSizeMb: 1.2, mimeType: 'image/png' },
-    { id: 'm2', fileName: 'product_demo.mp4', fileUrl: 'https://picsum.photos/400/400?random=2', fileSizeMb: 4.8, mimeType: 'video/mp4' },
-  ]);
+  const [mediaList, setMediaList] = useState<MobileMediaFile[]>([]);
+
+  const loadMedia = React.useCallback(() => {
+    return apiClient
+      .get('/media')
+      .then(({ data }) => setMediaList(data.media ?? []))
+      .catch(() => setMediaList([]));
+  }, []);
+
+  useEffect(() => {
+    loadMedia().finally(() => setLoading(false));
+  }, [loadMedia]);
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 800);
-  }, []);
+    loadMedia().finally(() => setRefreshing(false));
+  }, [loadMedia]);
 
   const handlePickMedia = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -53,22 +63,33 @@ export default function MediaLibraryScreen() {
     });
     if (result.canceled || !result.assets?.length) return;
 
-    setUploading(true);
     const asset = result.assets[0];
-    const newFile: MobileMediaFile = {
-      id: `m_${Date.now()}`,
-      fileName: asset.fileName ?? asset.uri.split('/').pop() ?? 'media_asset',
-      fileUrl: asset.uri,
-      fileSizeMb: asset.fileSize ? Number((asset.fileSize / (1024 * 1024)).toFixed(1)) : 0,
-      mimeType: asset.mimeType ?? (asset.type === 'video' ? 'video/mp4' : 'image/jpeg'),
-    };
-    setMediaList((prev) => [newFile, ...prev]);
-    setUploading(false);
+    const fileName = asset.fileName ?? asset.uri.split('/').pop() ?? 'media_asset';
+    const mimeType = asset.mimeType ?? (asset.type === 'video' ? 'video/mp4' : 'image/jpeg');
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', { uri: asset.uri, name: fileName, type: mimeType } as any);
+      const { data } = await apiClient.post('/media', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setMediaList((prev) => [data.media, ...prev]);
+    } catch (err: any) {
+      Alert.alert('Upload failed', err?.response?.data?.error ?? 'Please try again.');
+    } finally {
+      setUploading(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setMediaList((prev) => prev.filter((m) => m.id !== id));
-    setSelectedFile(null);
+  const handleDelete = async (id: string) => {
+    try {
+      await apiClient.delete(`/media/${id}`);
+      setMediaList((prev) => prev.filter((m) => m.id !== id));
+      setSelectedFile(null);
+    } catch (err: any) {
+      Alert.alert('Could not delete', err?.response?.data?.error ?? 'Please try again.');
+    }
   };
 
   const filteredMedia = mediaList
@@ -119,7 +140,9 @@ export default function MediaLibraryScreen() {
           </View>
         )}
 
-        {filteredMedia.length === 0 ? (
+        {loading ? (
+          <Text style={styles.loadingLabel}>Loading your media library...</Text>
+        ) : filteredMedia.length === 0 ? (
           <EmptyState icon="perm-media" title="No media files found" subtitle="Upload images or videos to use in scheduled statuses." />
         ) : (
           <View style={styles.grid}>
@@ -131,14 +154,14 @@ export default function MediaLibraryScreen() {
                     <Image source={{ uri: item.fileUrl }} style={styles.thumbnail} />
                     <View style={styles.typeBadge}>
                       <MaterialIcons name={isVideo ? 'videocam' : 'image'} size={12} color="#ffffff" />
-                      <Text style={styles.typeBadgeLabel}>{item.mimeType.split('/')[1].toUpperCase()}</Text>
+                      <Text style={styles.typeBadgeLabel}>{item.mimeType.split('/')[1]?.toUpperCase() ?? ''}</Text>
                     </View>
                   </View>
                   <View style={styles.mediaInfo}>
                     <Text style={styles.mediaName} numberOfLines={1}>
                       {item.fileName}
                     </Text>
-                    <Text style={styles.mediaMeta}>{item.fileSizeMb} MB</Text>
+                    <Text style={styles.mediaMeta}>{(item.fileSize / (1024 * 1024)).toFixed(1)} MB</Text>
                   </View>
                 </Pressable>
               );
@@ -153,7 +176,7 @@ export default function MediaLibraryScreen() {
             <Image source={{ uri: selectedFile.fileUrl }} style={styles.previewImage} />
             <Text style={styles.sheetTitle}>{selectedFile.fileName}</Text>
             <Text style={styles.sheetMeta}>
-              {selectedFile.fileSizeMb} MB • {selectedFile.mimeType}
+              {(selectedFile.fileSize / (1024 * 1024)).toFixed(1)} MB • {selectedFile.mimeType}
             </Text>
             <View style={styles.sheetActions}>
               <Pressable style={styles.deleteButton} onPress={() => handleDelete(selectedFile.id)}>
@@ -209,6 +232,12 @@ const styles = StyleSheet.create({
   },
   filterLabelActive: { color: Colors.onPrimary },
   gridContainer: { padding: Spacing.marginMobile, paddingBottom: Spacing.xxl, gap: Spacing.md },
+  loadingLabel: {
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
+    textAlign: 'center',
+    marginTop: Spacing.xl,
+  },
   uploadingBanner: {
     backgroundColor: `${Colors.primary}14`,
     borderRadius: Radius.lg,
