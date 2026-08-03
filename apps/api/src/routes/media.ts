@@ -49,14 +49,21 @@ mediaRouter.post('/', handleUpload, asyncHandler(async (req, res) => {
     console.error('[Media] Upload failed:', describeError(err));
     return res.status(502).json({ error: `Media upload failed: ${describeError(err)}` });
   }
-  const media = await createMediaFile({
-    userId: req.user!.id,
-    fileName: req.file.originalname,
-    fileUrl: url,
-    storagePath: path,
-    fileSize: req.file.size,
-    mimeType: req.file.mimetype,
-  });
+  let media: MediaFileRow;
+  try {
+    media = await createMediaFile({
+      userId: req.user!.id,
+      fileName: req.file.originalname,
+      fileUrl: url,
+      storagePath: path,
+      fileSize: req.file.size,
+      mimeType: req.file.mimetype,
+    });
+  } catch (err) {
+    await deleteMediaFileObject(path).catch(() => undefined);
+    console.error('[Media] Metadata insert failed:', describeError(err));
+    return res.status(502).json({ error: `Media metadata could not be saved: ${describeError(err)}` });
+  }
 
   res.status(201).json({ media: mapMedia(media) });
 }));
