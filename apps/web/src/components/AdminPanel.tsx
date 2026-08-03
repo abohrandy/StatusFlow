@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiClient } from '../lib/apiClient';
 
-type AdminTab = 'metrics' | 'subscriptions' | 'payments' | 'invoices' | 'referrals' | 'webhooks' | 'users' | 'workers' | 'audit';
+type AdminTab = 'subscriptions' | 'payments' | 'invoices' | 'referrals' | 'webhooks' | 'users' | 'workers' | 'audit';
 
 interface DashboardStats {
   activeSubscriptions: number;
@@ -21,7 +21,7 @@ function fmtDate(value: string | null): string {
 }
 
 export const AdminPanel: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<AdminTab>('metrics');
+  const [activeTab, setActiveTab] = useState<AdminTab>('subscriptions');
   const [stats, setStats] = useState<DashboardStats | null>(null);
 
   useEffect(() => {
@@ -49,14 +49,13 @@ export const AdminPanel: React.FC = () => {
               abohrandy@gmail.com (Super Admin)
             </span>
           </div>
-          <p className="text-sm text-zinc-400 mt-1">Real-time platform metrics, WhatsApp socket health, queue throughput, storage usage, and weekly retention.</p>
+          <p className="text-sm text-zinc-400 mt-1">Real-time platform metrics, subscriptions management, payment ledgers, and audit logs.</p>
         </div>
 
-        {/* Tab Selector — 9 items wrap into an unreadable multi-row mess on phones, so it
-            scrolls horizontally below md instead (same overflow-x-auto pattern used for the
-            history log's filter pills). */}
+        {/* Tab Selector */}
         <div className="flex gap-1 p-1 bg-zinc-950 rounded-xl border border-zinc-800 overflow-x-auto md:flex-wrap">
-          {(['metrics', 'subscriptions', 'payments', 'invoices', 'referrals', 'webhooks', 'users', 'workers', 'audit'] as const).map((t) => (
+          {(['subscriptions', 'payments', 'invoices', 'referrals', 'webhooks', 'users', 'workers', 'audit'] as const).map((t) => (
+
             <button
               key={t}
               onClick={() => setActiveTab(t)}
@@ -101,126 +100,7 @@ export const AdminPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Overview Stat Cards Answers Key Business Questions */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* 1. Active Users */}
-        <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-1">
-          <div className="flex justify-between items-center text-xs text-zinc-400">
-            <span>How Many Active Users?</span>
-            <span className="text-emerald-400 font-bold">+12% this wk</span>
-          </div>
-          <div className="text-2xl font-bold text-white">1,248</div>
-          <div className="text-[11px] text-zinc-500">1,180 Active MAUs</div>
-        </div>
 
-        {/* 2. Connected WhatsApp Sessions */}
-        <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-1">
-          <div className="flex justify-between items-center text-xs text-zinc-400">
-            <span>WhatsApp Sessions</span>
-            <span className="text-emerald-400 font-bold">1 per User</span>
-          </div>
-          <div className="text-2xl font-bold text-emerald-400">892 Connected</div>
-          <div className="text-[11px] text-zinc-500">Single device sessions active</div>
-        </div>
-
-        {/* 3. Scheduled Posts Today */}
-        <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-1">
-          <div className="flex justify-between items-center text-xs text-zinc-400">
-            <span>Scheduled Today</span>
-            <span className="text-emerald-400 font-bold">Today</span>
-          </div>
-          <div className="text-2xl font-bold text-white">342 Posts</div>
-          <div className="text-[11px] text-zinc-500">184 delivered, 158 pending</div>
-        </div>
-
-        {/* 4. Failed Jobs & Queue Health */}
-        <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-1">
-          <div className="flex justify-between items-center text-xs text-zinc-400">
-            <span>Failed Jobs / DLQ</span>
-            <span className="text-emerald-400 font-bold">Queue Healthy</span>
-          </div>
-          <div className="text-2xl font-bold text-white">0 Failures</div>
-          <div className="text-[11px] text-emerald-400">99.98% delivery success rate</div>
-        </div>
-
-        {/* 5. Storage Usage */}
-        <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-1">
-          <div className="flex justify-between items-center text-xs text-zinc-400">
-            <span>Storage Usage</span>
-            <span className="text-zinc-400">S3 / R2 Bucket</span>
-          </div>
-          <div className="text-2xl font-bold text-white">42.8 GB</div>
-          <div className="text-[11px] text-zinc-500">Media images & videos</div>
-        </div>
-
-        {/* 6. Queue Health (BullMQ) */}
-        <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-1">
-          <div className="flex justify-between items-center text-xs text-zinc-400">
-            <span>Queue Latency (Redis)</span>
-            <span className="text-emerald-400 font-bold">1.2ms</span>
-          </div>
-          <div className="text-2xl font-bold text-white">14 Pending</div>
-          <div className="text-[11px] text-zinc-500">10 Worker cluster nodes active</div>
-        </div>
-
-        {/* 7. Weekly Retention */}
-        <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-1">
-          <div className="flex justify-between items-center text-xs text-zinc-400">
-            <span>Weekly Retention</span>
-            <span className="text-emerald-400 font-bold">W4 Cohort</span>
-          </div>
-          <div className="text-2xl font-bold text-white">78.4%</div>
-          <div className="text-[11px] text-zinc-500">Active repeat schedulers</div>
-        </div>
-      </div>
-
-      {/* Tab 1: Detailed System Metrics Dashboard */}
-      {activeTab === 'metrics' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Storage & Queue Detailed Box */}
-          <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
-            <h3 className="font-semibold text-base text-white">S3 Storage Allocation & Bandwidth</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between text-xs text-zinc-400">
-                <span>Total Media Storage Capacity (500 GB)</span>
-                <span className="text-emerald-400 font-bold">8.5% Used</span>
-              </div>
-              <div className="w-full h-2 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
-                <div className="h-full bg-emerald-500 w-[8.5%]" />
-              </div>
-              <div className="grid grid-cols-2 gap-4 pt-2">
-                <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-800 text-xs">
-                  <div className="text-zinc-500">Image Assets</div>
-                  <div className="text-white font-bold text-sm mt-0.5">28.4 GB</div>
-                </div>
-                <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-800 text-xs">
-                  <div className="text-zinc-500">Video Assets</div>
-                  <div className="text-white font-bold text-sm mt-0.5">14.4 GB</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Retention & Cohorts Detailed Box */}
-          <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
-            <h3 className="font-semibold text-base text-white">Weekly User Retention Cohorts</h3>
-            <div className="space-y-2 text-xs">
-              {[
-                { cohort: 'Week 1 (Current)', users: 240, retention: '100%' },
-                { cohort: 'Week 2', users: 218, retention: '90.8%' },
-                { cohort: 'Week 3', users: 195, retention: '81.2%' },
-                { cohort: 'Week 4', users: 188, retention: '78.4%' },
-              ].map((c, i) => (
-                <div key={i} className="flex justify-between items-center p-2.5 rounded-lg bg-zinc-950 border border-zinc-800">
-                  <span className="text-zinc-300 font-medium">{c.cohort}</span>
-                  <span className="text-zinc-400">{c.users} users</span>
-                  <span className="text-emerald-400 font-bold">{c.retention}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {activeTab === 'subscriptions' && <SubscriptionManagement />}
       {activeTab === 'payments' && <PaymentsLedger />}

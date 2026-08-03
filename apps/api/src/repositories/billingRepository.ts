@@ -89,12 +89,38 @@ export async function getUserCreatedAt(userId: string): Promise<Date | null> {
 }
 
 export async function getActiveSubscription(userId: string): Promise<SubscriptionRow | null> {
+  // Super Admin override: ADMIN users bypass all account/post limits by inheriting monthly-business features
+  const userCheck = await pool.query<{ role: string; email: string }>('SELECT role, email FROM users WHERE id = $1', [userId]);
+  if (userCheck.rows[0]?.role === 'ADMIN' || userCheck.rows[0]?.email === 'abohrandy@gmail.com') {
+    return {
+      id: 'admin-override',
+      user_id: userId,
+      plan_id: 'admin-plan',
+      plan_slug: 'monthly-business',
+      status: 'active',
+      paystack_customer_code: null,
+      paystack_subscription_code: null,
+      paystack_email_token: null,
+      current_period_start: new Date().toISOString(),
+      current_period_end: new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000).toISOString(),
+      next_billing_at: null,
+      renewed_at: null,
+      cancel_at_period_end: false,
+      cancelled_at: null,
+      expired_at: null,
+      consecutive_renewals: 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }
+
   const result = await pool.query<SubscriptionRow>(
     `SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
     [userId],
   );
   return result.rows[0] ?? null;
 }
+
 
 export async function getSubscriptionHistory(userId: string): Promise<SubscriptionRow[]> {
   const result = await pool.query<SubscriptionRow>(

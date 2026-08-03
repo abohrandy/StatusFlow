@@ -230,11 +230,9 @@ function DashboardShell() {
               🔔
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
             </button>
-            <div className="px-2.5 sm:px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-medium border border-emerald-500/20 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="hidden sm:inline">WhatsApp Socket Connected</span>
-            </div>
+            <HeaderSocketBadge />
             <div className="relative">
+
               <button
                 onClick={() => setAccountMenuOpen((open) => !open)}
                 className="w-9 h-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-sm flex items-center justify-center hover:bg-emerald-500/20 transition-all"
@@ -307,7 +305,32 @@ function DashboardShell() {
   );
 }
 
+function HeaderSocketBadge() {
+  const [connected, setConnected] = useState(false);
+
+  useEffect(() => {
+    apiClient
+      .whatsappStatus()
+      .then((res) => setConnected(res.connected))
+      .catch(() => setConnected(false));
+  }, []);
+
+  return (
+    <div
+      className={`px-2.5 sm:px-3 py-1 rounded-full text-xs font-medium border flex items-center gap-2 ${
+        connected
+          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+          : 'bg-zinc-800/80 text-zinc-400 border-zinc-700'
+      }`}
+    >
+      <span className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+      <span className="hidden sm:inline">{connected ? 'WhatsApp Connected' : 'Waiting for Connection'}</span>
+    </div>
+  );
+}
+
 export default function App() {
+
   const [page, setPage] = useState<'login' | 'register' | 'forgot-password' | 'onboarding'>('login');
 
   return (
