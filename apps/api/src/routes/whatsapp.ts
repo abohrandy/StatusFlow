@@ -56,14 +56,8 @@ whatsappRouter.post('/pairing/request', asyncHandler(async (req, res) => {
     await recordTrialPhoneNumber(phoneNumber, req.user!.id);
   }
 
-  let pairingCode = '';
-  try {
-    const connection = new WhatsAppConnection(session.id, redisConnection);
-    pairingCode = await connection.requestPairingCode(phoneNumber);
-  } catch (err) {
-    console.warn('[WhatsApp] Could not obtain real Baileys pairing code, falling back to session pairing code:', err);
-    pairingCode = session.id.slice(0, 8).toUpperCase();
-  }
+  const connection = new WhatsAppConnection(session.id, redisConnection);
+  const pairingCode = await connection.requestPairingCode(phoneNumber);
 
   res.status(201).json({ sessionId: session.id, pairingCode });
 }));
