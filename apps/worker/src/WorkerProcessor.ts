@@ -1,5 +1,6 @@
 import { Job } from 'bullmq';
-import { BaileysManager } from '@statusflow/baileys-engine';
+import { WhatsAppConnection } from '@statusflow/baileys-engine';
+import { redisConnection } from './redis';
 import {
   getStatusPostForWorker,
   markStatusPostCompleted,
@@ -13,11 +14,11 @@ export interface PublishJobData {
 }
 
 /**
- * Publishes one scheduled status post. Real WhatsApp delivery isn't wired up yet — the
- * pairing/connection layer in @statusflow/baileys-engine is still a mock (see
- * BaileysManager's doc comments) — so the actual "send" step here is simulated. Every
- * surrounding piece is real: DB status transitions, per-attempt logging, and only
- * marking a post permanently FAILED once BullMQ's retries are exhausted.
+ * Publishes one scheduled status post over a real WhatsApp connection (see
+ * @statusflow/baileys-engine's WhatsAppConnection — reuses the session's persisted
+ * Redis auth state from pairing, no new pairing code needed). DB status transitions,
+ * per-attempt logging, and only marking a post permanently FAILED once BullMQ's retries
+ * are exhausted are all real regardless of whether the send itself succeeds.
  */
 export class WorkerProcessor {
   public async processJob(job: Job<PublishJobData>): Promise<void> {
@@ -42,9 +43,13 @@ export class WorkerProcessor {
       return;
     }
 
+    const connection = new WhatsAppConnection(post.session_id!, redisConnection);
     try {
-      const baileys = new BaileysManager(post.session_id ?? post.id);
-      baileys.simulateConnectionSuccess();
+      await connection.sendStatus({
+        mediaType: post.media_type,
+        caption: post.caption,
+        mediaUrl: post.media_url,
+      });
       await markStatusPostCompleted(post.id);
       await recordQueueLog(post.id, attemptNumber, 'Published successfully.');
     } catch (err: any) {
@@ -55,6 +60,8 @@ export class WorkerProcessor {
       } else {
         throw err; // let BullMQ retry with its configured backoff
       }
+    } finally {
+      await connection.close();
     }
   }
 }

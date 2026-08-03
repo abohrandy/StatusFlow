@@ -1,10 +1,6 @@
 import { Worker } from 'bullmq';
-import IORedis from 'ioredis';
 import { WorkerProcessor } from './WorkerProcessor';
-
-const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  maxRetriesPerRequest: null,
-});
+import { redisConnection as connection } from './redis';
 
 const processor = new WorkerProcessor();
 
