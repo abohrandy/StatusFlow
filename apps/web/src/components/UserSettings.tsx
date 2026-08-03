@@ -1,15 +1,25 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { ApiError } from '@statusflow/api-client';
+import { apiClient } from '../lib/apiClient';
 
 export const UserSettings: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'profile' | 'security' | 'preferences' | 'privacy'>('profile');
 
   // Form States
-  const [fullName, setFullName] = useState('John Doe');
-  const [companyName, setCompanyName] = useState('StatusFlow Enterprise');
+  const [fullName, setFullName] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [timezone, setTimezone] = useState('Africa/Lagos');
+  const [savingProfile, setSavingProfile] = useState(false);
   const [notifyOnDisconnect, setNotifyOnDisconnect] = useState(true);
   const [notifyOnFailure, setNotifyOnFailure] = useState(true);
   const [notifyOnRenewal, setNotifyOnRenewal] = useState(true);
+
+  useEffect(() => {
+    apiClient.getProfile().then((profile) => {
+      if (profile.fullName) setFullName(profile.fullName);
+      if (profile.companyName) setCompanyName(profile.companyName);
+    }).catch(() => undefined);
+  }, []);
 
   // Security States
   const [currentPassword, setCurrentPassword] = useState('');
@@ -24,9 +34,17 @@ export const UserSettings: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleProfileSave = (e: React.FormEvent) => {
+  const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    triggerToast('Profile and organization settings updated successfully!');
+    setSavingProfile(true);
+    try {
+      await apiClient.saveProfile(fullName, companyName);
+      triggerToast('Profile and organization settings updated successfully!');
+    } catch (err) {
+      triggerToast(err instanceof ApiError ? err.message : 'Could not save profile changes. Please try again.');
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handlePasswordChange = (e: React.FormEvent) => {
@@ -133,9 +151,10 @@ export const UserSettings: React.FC = () => {
 
           <button
             type="submit"
-            className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 font-semibold text-zinc-950 text-xs rounded-xl transition-all shadow-lg shadow-emerald-500/20"
+            disabled={savingProfile}
+            className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 font-semibold text-zinc-950 text-xs rounded-xl transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-60"
           >
-            Save Profile Changes
+            {savingProfile ? 'Saving...' : 'Save Profile Changes'}
           </button>
         </form>
       )}
