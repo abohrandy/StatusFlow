@@ -66,6 +66,10 @@ export class WhatsAppConnection extends EventEmitter {
   /** Starts the connection and requests a real WhatsApp pairing code for `phoneNumber`. */
   async requestPairingCode(phoneNumber: string): Promise<string> {
     const sock = await this.ensureSocket();
+    // Baileys needs a moment to complete the initial WebSocket handshake before
+    // requestPairingCode is called. Calling it immediately can close the socket
+    // and surface the unhelpful "Connection Closed" error from WhatsApp.
+    await new Promise((resolve) => setTimeout(resolve, 3000));
     return sock.requestPairingCode(phoneNumber);
   }
 
