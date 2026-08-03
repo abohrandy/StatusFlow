@@ -29,6 +29,16 @@ jobs:
       - name: Install Monorepo Dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build Shared Packages
+        # packages/subscriptions and packages/baileys-engine are the only workspace
+        # packages whose package.json points `main`/`types` at dist/ instead of src/
+        # directly, so anything importing them (apps/web imports @statusflow/subscriptions,
+        # apps/api and apps/worker import @statusflow/baileys-engine) needs their dist/*.d.ts
+        # generated first, or the typecheck step below fails with "Cannot find module" —
+        # exactly what happened once the pnpm-version fix above got this far for the first
+        # time.
+        run: pnpm --filter @statusflow/subscriptions --filter @statusflow/baileys-engine run build
+
       - name: Typecheck Workspace
         # Not `pnpm --recursive exec tsc --noEmit` — several shared packages
         # (packages/types, ui, api-client, validation, utils) intentionally have no
