@@ -26,6 +26,7 @@ RUN pnpm install --frozen-lockfile
 # redirects bundlers' runtime resolution, not tsc's type-checking), so it fails the same way
 # api would if this ran after web instead of before both.
 RUN pnpm --filter @statusflow/subscriptions build
+RUN pnpm --filter @statusflow/baileys-engine build
 RUN pnpm --filter @statusflow/web build
 RUN pnpm --filter @statusflow/api build
 
