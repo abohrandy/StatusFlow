@@ -2,6 +2,7 @@ import { NextFunction, Request, Response, Router } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../utils/asyncHandler';
+import { describeError } from '../utils/describeError';
 import { deleteMediaFileObject, uploadMediaFile } from '../storage';
 import { createMediaFile, deleteMediaFile, listMediaFilesForUser, type MediaFileRow } from '../repositories/mediaRepository';
 
@@ -40,7 +41,14 @@ mediaRouter.post('/', handleUpload, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'No file uploaded — send multipart/form-data with a "file" field.' });
   }
 
-  const { path, url } = await uploadMediaFile(req.user!.id, req.file.buffer, req.file.originalname, req.file.mimetype);
+  let path: string;
+  let url: string;
+  try {
+    ({ path, url } = await uploadMediaFile(req.user!.id, req.file.buffer, req.file.originalname, req.file.mimetype));
+  } catch (err) {
+    console.error('[Media] Upload failed:', describeError(err));
+    return res.status(502).json({ error: `Media upload failed: ${describeError(err)}` });
+  }
   const media = await createMediaFile({
     userId: req.user!.id,
     fileName: req.file.originalname,
