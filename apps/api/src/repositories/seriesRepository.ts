@@ -32,6 +32,8 @@ export interface CreateSeriesInput {
   mediaType: MediaType;
   caption: string | null;
   mediaUrl: string | null;
+  /** See statusPostRepository.ts's CreateStatusPostInput#mediaFileId — same duplicate-row avoidance. */
+  mediaFileId?: string | null;
   recurrenceType: RecurrenceType;
   intervalDays: number | null;
   weekdays: number[] | null;
@@ -40,7 +42,11 @@ export interface CreateSeriesInput {
 }
 
 export async function createSeries(input: CreateSeriesInput): Promise<SeriesRow> {
-  const mediaFileId = input.mediaUrl ? await createMediaFile(input.userId, input.mediaType, input.mediaUrl) : null;
+  const mediaFileId = input.mediaFileId
+    ? input.mediaFileId
+    : input.mediaUrl
+    ? await createMediaFile(input.userId, input.mediaType, input.mediaUrl)
+    : null;
   const result = await pool.query<SeriesRow>(
     `INSERT INTO schedules (
        user_id, media_type, caption, media_file_id,

@@ -63,6 +63,7 @@ postsRouter.post('/', requireScheduleQuota, asyncHandler(async (req, res) => {
   const scheduledAt = req.body?.scheduledAt;
   const caption = req.body?.caption ? String(req.body.caption) : null;
   const mediaUrl = req.body?.mediaUrl ? String(req.body.mediaUrl) : null;
+  const mediaFileId = req.body?.mediaFileId ? String(req.body.mediaFileId) : null;
 
   if (!MEDIA_TYPES.includes(mediaType)) {
     return res.status(400).json({ error: 'mediaType must be one of TEXT, IMAGE, VIDEO.' });
@@ -81,6 +82,7 @@ postsRouter.post('/', requireScheduleQuota, asyncHandler(async (req, res) => {
   const session = await getLatestSession(req.user!.id);
   const post = await createStatusPost({
     userId: req.user!.id,
+    mediaFileId,
     sessionId: session?.id ?? null,
     mediaType,
     caption,
@@ -110,6 +112,7 @@ postsRouter.post('/recurring', requireRecurringSeriesAllowed, asyncHandler(async
   const mediaType = req.body?.mediaType;
   const caption = req.body?.caption ? String(req.body.caption) : null;
   const mediaUrl = req.body?.mediaUrl ? String(req.body.mediaUrl) : null;
+  const mediaFileId = req.body?.mediaFileId ? String(req.body.mediaFileId) : null;
   const recurrenceType = req.body?.recurrenceType;
   const startAt = req.body?.startAt;
   const endAt = req.body?.endAt;
@@ -162,6 +165,7 @@ postsRouter.post('/recurring', requireRecurringSeriesAllowed, asyncHandler(async
     mediaType,
     caption,
     mediaUrl,
+    mediaFileId,
     recurrenceType,
     intervalDays,
     weekdays,

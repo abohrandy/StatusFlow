@@ -76,7 +76,7 @@ export default function ComposerScreen() {
   const [selectedColor, setSelectedColor] = useState(SWATCHES[0]);
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [mediaAsset, setMediaAsset] = useState<{ uri: string; fileName?: string; remoteUrl?: string } | null>(null);
+  const [mediaAsset, setMediaAsset] = useState<{ uri: string; fileName?: string; remoteUrl?: string; remoteId?: string } | null>(null);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [schedulePreset, setSchedulePreset] = useState(SCHEDULE_PRESETS[0].key);
 
@@ -144,7 +144,7 @@ export default function ComposerScreen() {
       const { data } = await apiClient.post('/media', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setMediaAsset({ uri: asset.uri, fileName, remoteUrl: data.media.fileUrl });
+      setMediaAsset({ uri: asset.uri, fileName, remoteUrl: data.media.fileUrl, remoteId: data.media.id });
     } catch (err: any) {
       Alert.alert('Upload failed', err?.response?.data?.error ?? 'Could not upload this file — please try again.');
       setMediaAsset(null);
@@ -161,35 +161,48 @@ export default function ComposerScreen() {
     setTimeout(() => setSuccessMessage(null), 4000);
   };
 
-  const handleScheduleStatus = async () => {
+  const validateMediaAndRecurrence = (): boolean => {
     if (!caption && statusType === 'text') {
       Alert.alert('Add a caption', 'Please enter a status text caption.');
-      return;
+      return false;
     }
     if (statusType !== 'text' && !mediaAsset) {
       Alert.alert('Add media', `Please select an ${statusType} from your device first.`);
-      return;
+      return false;
     }
     if (statusType !== 'text' && (uploadingMedia || !mediaAsset?.remoteUrl)) {
       Alert.alert('Still uploading', 'Wait for the media upload to finish before scheduling.');
-      return;
+      return false;
     }
     if (postMode === 'recurring' && recurrenceType === 'WEEKDAYS' && weekdays.length === 0) {
       Alert.alert('Pick a day', 'Choose at least one weekday for the series to repeat on.');
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const submitOnce = async (scheduledAtIso: string, successMessage: string) => {
+    await apiClient.post('/posts', {
+      mediaType: statusType.toUpperCase(),
+      caption: caption || undefined,
+      mediaUrl: statusType !== 'text' ? mediaAsset?.remoteUrl : undefined,
+      mediaFileId: statusType !== 'text' ? mediaAsset?.remoteId : undefined,
+      scheduledAt: scheduledAtIso,
+    });
+    setCaption('');
+    setMediaAsset(null);
+    setSuccessMessage(successMessage);
+    setTimeout(() => setSuccessMessage(null), 2000);
+  };
+
+  const handleScheduleStatus = async () => {
+    if (!validateMediaAndRecurrence()) return;
 
     setSaving(true);
     try {
       if (postMode === 'once') {
         const scheduledAt = SCHEDULE_PRESETS.find((p) => p.key === schedulePreset)!.compute();
-        await apiClient.post('/posts', {
-          mediaType: statusType.toUpperCase(),
-          caption: caption || undefined,
-          mediaUrl: statusType !== 'text' ? mediaAsset?.remoteUrl : undefined,
-          scheduledAt: scheduledAt.toISOString(),
-        });
-        setSuccessMessage('Status scheduled successfully!');
+        await submitOnce(scheduledAt.toISOString(), 'Status scheduled successfully!');
       } else {
         const startAt = SCHEDULE_PRESETS.find((p) => p.key === startPreset)!.compute();
         const endAt = END_DURATION_PRESETS.find((p) => p.key === endDurationKey)!.compute(startAt);
@@ -197,23 +210,42 @@ export default function ComposerScreen() {
           mediaType: statusType.toUpperCase(),
           caption: caption || undefined,
           mediaUrl: statusType !== 'text' ? mediaAsset?.remoteUrl : undefined,
+          mediaFileId: statusType !== 'text' ? mediaAsset?.remoteId : undefined,
           recurrenceType,
           intervalDays: recurrenceType === 'INTERVAL' ? intervalDays : undefined,
           weekdays: recurrenceType === 'WEEKDAYS' ? weekdays : undefined,
           startAt: startAt.toISOString(),
           endAt: endAt.toISOString(),
         });
+        setCaption('');
+        setMediaAsset(null);
         setSuccessMessage('Recurring series created!');
+        setTimeout(() => setSuccessMessage(null), 2000);
         refreshSeries();
       }
-      setCaption('');
-      setMediaAsset(null);
-      setTimeout(() => setSuccessMessage(null), 2000);
     } catch (err: any) {
       if (err?.response?.status === 403) {
         Alert.alert('Plan limit reached', err.response?.data?.error ?? 'Upgrade your plan to unlock this.');
       } else {
         Alert.alert('Could not schedule', err?.response?.data?.error ?? 'Please try again.');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePostNow = async () => {
+    if (!validateMediaAndRecurrence()) return;
+    setSaving(true);
+    try {
+      // A few seconds out, not literally "now" — the API rejects a scheduledAt that isn't
+      // strictly in the future, and this comfortably clears normal request latency too.
+      await submitOnce(new Date(Date.now() + 5_000).toISOString(), "Posting now — it'll go out within a few seconds.");
+    } catch (err: any) {
+      if (err?.response?.status === 403) {
+        Alert.alert('Plan limit reached', err.response?.data?.error ?? 'Upgrade your plan to unlock this.');
+      } else {
+        Alert.alert('Could not post', err?.response?.data?.error ?? 'Please try again.');
       }
     } finally {
       setSaving(false);
@@ -464,12 +496,20 @@ export default function ComposerScreen() {
         <Pressable onPress={handleSaveDraft} disabled={saving}>
           <Text style={styles.draftLabel}>Save Draft</Text>
         </Pressable>
-        <Pressable style={styles.scheduleButton} onPress={handleScheduleStatus} disabled={saving || uploadingMedia}>
-          <MaterialIcons name="schedule" size={18} color={Colors.onPrimary} />
-          <Text style={styles.scheduleLabel}>
-            {saving ? 'Scheduling...' : postMode === 'once' ? 'Schedule Status' : 'Create Series'}
-          </Text>
-        </Pressable>
+        <View style={styles.actionBarButtons}>
+          {postMode === 'once' && (
+            <Pressable style={styles.postNowButton} onPress={handlePostNow} disabled={saving || uploadingMedia}>
+              <MaterialIcons name="bolt" size={18} color={Colors.onSurface} />
+              <Text style={styles.postNowLabel}>Post Now</Text>
+            </Pressable>
+          )}
+          <Pressable style={styles.scheduleButton} onPress={handleScheduleStatus} disabled={saving || uploadingMedia}>
+            <MaterialIcons name="schedule" size={18} color={Colors.onPrimary} />
+            <Text style={styles.scheduleLabel}>
+              {saving ? 'Scheduling...' : postMode === 'once' ? 'Schedule Status' : 'Create Series'}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -665,6 +705,26 @@ const styles = StyleSheet.create({
   draftLabel: {
     ...Typography.labelMd,
     color: Colors.primary,
+  },
+  actionBarButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  postNowButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    backgroundColor: Colors.surfaceContainerHigh,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+  },
+  postNowLabel: {
+    ...Typography.labelMd,
+    color: Colors.onSurface,
   },
   scheduleButton: {
     flexDirection: 'row',

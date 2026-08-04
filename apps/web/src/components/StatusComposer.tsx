@@ -79,35 +79,48 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
     setTimeout(() => setSaveStatusMessage(null), 4000);
   };
 
-  const handleScheduleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitOnce = async (scheduledAtIso: string, successMessage: string) => {
+    await apiClient.createStatusPost({
+      mediaType: statusType,
+      caption: caption || undefined,
+      mediaUrl: statusType !== 'TEXT' ? selectedMediaUrl ?? undefined : undefined,
+      mediaFileId: statusType !== 'TEXT' ? selectedMedia?.id : undefined,
+      scheduledAt: scheduledAtIso,
+    });
+    setScheduledTime('');
+    setCaption('');
+    setSaveStatusMessage(successMessage);
+    setTimeout(() => setSaveStatusMessage(null), 3000);
+  };
+
+  const validateMediaAndRecurrence = (): boolean => {
     if (statusType !== 'TEXT' && !selectedMediaUrl) {
       setSaveStatusMessage('Select or upload a media asset first.');
       setTimeout(() => setSaveStatusMessage(null), 3000);
-      return;
+      return false;
     }
     if (postMode === 'RECURRING' && recurrenceType === 'WEEKDAYS' && weekdays.length === 0) {
       setSaveStatusMessage('Pick at least one weekday for the series to repeat on.');
       setTimeout(() => setSaveStatusMessage(null), 3000);
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const handleScheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateMediaAndRecurrence()) return;
 
     setCheckingQuota(true);
     try {
       if (postMode === 'ONCE') {
-        await apiClient.createStatusPost({
-          mediaType: statusType,
-          caption: caption || undefined,
-          mediaUrl: statusType !== 'TEXT' ? selectedMediaUrl ?? undefined : undefined,
-          scheduledAt: new Date(scheduledTime).toISOString(),
-        });
-        setScheduledTime('');
-        setSaveStatusMessage('Status scheduled successfully and added to queue!');
+        await submitOnce(new Date(scheduledTime).toISOString(), 'Status scheduled successfully and added to queue!');
       } else {
         await apiClient.createRecurringSeries({
           mediaType: statusType,
           caption: caption || undefined,
           mediaUrl: statusType !== 'TEXT' ? selectedMediaUrl ?? undefined : undefined,
+          mediaFileId: statusType !== 'TEXT' ? selectedMedia?.id : undefined,
           recurrenceType,
           intervalDays: recurrenceType === 'INTERVAL' ? intervalDays : undefined,
           weekdays: recurrenceType === 'WEEKDAYS' ? weekdays : undefined,
@@ -117,16 +130,35 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
         setRecurStartAt('');
         setRecurEndAt('');
         setWeekdays([]);
+        setCaption('');
         setSaveStatusMessage('Recurring series created — upcoming posts will appear as they\'re scheduled.');
+        setTimeout(() => setSaveStatusMessage(null), 3000);
         refreshSeries();
       }
-      setCaption('');
-      setTimeout(() => setSaveStatusMessage(null), 3000);
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
         setShowQuotaModal(true);
       } else {
         setSaveStatusMessage(err instanceof ApiError ? err.message : 'Could not schedule status right now. Please try again.');
+        setTimeout(() => setSaveStatusMessage(null), 3000);
+      }
+    } finally {
+      setCheckingQuota(false);
+    }
+  };
+
+  const handlePostNow = async () => {
+    if (!validateMediaAndRecurrence()) return;
+    setCheckingQuota(true);
+    try {
+      // A few seconds out, not literally "now" — the API rejects a scheduledAt that isn't
+      // strictly in the future, and this comfortably clears normal request latency too.
+      await submitOnce(new Date(Date.now() + 5_000).toISOString(), 'Posting now — it\'ll go out within a few seconds.');
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        setShowQuotaModal(true);
+      } else {
+        setSaveStatusMessage(err instanceof ApiError ? err.message : 'Could not post right now. Please try again.');
         setTimeout(() => setSaveStatusMessage(null), 3000);
       }
     } finally {
@@ -403,17 +435,29 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
           )}
 
           {/* Submit Action */}
-          <button
-            type="submit"
-            disabled={checkingQuota}
-            className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 font-semibold text-zinc-950 text-sm rounded-xl transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-60"
-          >
-            {checkingQuota
-              ? 'Checking your plan...'
-              : postMode === 'ONCE'
-              ? '🚀 Schedule Status Post'
-              : '🔁 Create Recurring Series'}
-          </button>
+          <div className="flex gap-3">
+            {postMode === 'ONCE' && (
+              <button
+                type="button"
+                onClick={handlePostNow}
+                disabled={checkingQuota}
+                className="flex-1 py-3.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 font-semibold text-white text-sm rounded-xl transition-all disabled:opacity-60"
+              >
+                {checkingQuota ? 'Working...' : '⚡ Post Now'}
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={checkingQuota}
+              className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 font-semibold text-zinc-950 text-sm rounded-xl transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-60"
+            >
+              {checkingQuota
+                ? 'Checking your plan...'
+                : postMode === 'ONCE'
+                ? '🚀 Schedule Status Post'
+                : '🔁 Create Recurring Series'}
+            </button>
+          </div>
         </form>
 
         {/* Right Mobile Phone Live Preview (5 cols) */}

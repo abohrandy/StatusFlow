@@ -31,6 +31,10 @@ export interface CreateStatusPostInput {
   scheduledAt: string;
   caption?: string;
   mediaUrl?: string;
+  /** The real media_files row id for this asset, if known (from uploadMedia() or listMedia()) —
+   * passing it avoids the server creating a second, duplicate-looking media_files row for the
+   * same underlying file. */
+  mediaFileId?: string;
 }
 
 export type RecurrenceType = 'INTERVAL' | 'WEEKDAYS';
@@ -56,6 +60,8 @@ export interface CreateRecurringSeriesInput {
   mediaType: StatusPost['mediaType'];
   caption?: string;
   mediaUrl?: string;
+  /** See CreateStatusPostInput#mediaFileId — same duplicate-row avoidance. */
+  mediaFileId?: string;
   recurrenceType: RecurrenceType;
   intervalDays?: number;
   weekdays?: number[];

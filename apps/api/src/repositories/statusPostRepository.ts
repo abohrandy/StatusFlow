@@ -48,11 +48,20 @@ export interface CreateStatusPostInput {
   mediaType: MediaType;
   caption: string | null;
   mediaUrl: string | null;
+  /** The real media_files row for this asset (from POST /media or a prior upload), if the
+   * caller has it — reusing it avoids createMediaFile() below fabricating a second,
+   * duplicate-looking row (file_name "status-<timestamp>", file_size 0) that shows up
+   * alongside the real one in the Media Library for the exact same underlying file. */
+  mediaFileId?: string | null;
   scheduledAt: string;
 }
 
 export async function createStatusPost(input: CreateStatusPostInput): Promise<StatusPostWithMediaRow> {
-  const mediaFileId = input.mediaUrl ? await createMediaFile(input.userId, input.mediaType, input.mediaUrl) : null;
+  const mediaFileId = input.mediaFileId
+    ? input.mediaFileId
+    : input.mediaUrl
+    ? await createMediaFile(input.userId, input.mediaType, input.mediaUrl)
+    : null;
   const result = await pool.query<StatusPostRow>(
     `INSERT INTO status_posts (user_id, session_id, media_file_id, media_type, caption, scheduled_at, status)
      VALUES ($1, $2, $3, $4, $5, $6, 'SCHEDULED')
