@@ -1,0 +1,15 @@
+# Railway Configuration File for the StatusFlow background worker service.
+#
+# This lives here (not the repo-root railway.toml, which is the API's config) because
+# Railway re-applies the config file a service points at on every redeploy — a worker
+# service left pointed at the root file (or with no explicit config path of its own)
+# gets its Dockerfile path and start command silently reset back to the API's every time
+# a new commit triggers a redeploy. Point this service's Settings > Config File Path at
+# "/apps/worker/railway.toml" so its own settings actually stick.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/worker/Dockerfile"
+
+[deploy]
+startCommand = "node apps/worker/dist/index.js"
+restartPolicyType = "ON_FAILURE"

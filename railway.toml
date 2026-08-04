@@ -1,4 +1,9 @@
-# Railway Configuration File for StatusFlow Monorepo
+# Railway Configuration File for the StatusFlow API service specifically — NOT shared
+# with other services in this monorepo. The worker service has its own config file at
+# apps/worker/railway.toml; without that, Railway re-applies whichever config file a
+# service points at on every redeploy, so a worker service with no config path of its own
+# (or pointed at this file) would keep getting silently reset to the API's Dockerfile path
+# and start command on every push.
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "apps/api/Dockerfile"
