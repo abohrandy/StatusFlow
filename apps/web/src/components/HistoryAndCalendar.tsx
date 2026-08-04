@@ -4,6 +4,10 @@ import { apiClient } from '../lib/apiClient';
 
 type HistoryStatus = 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
 export const HistoryAndCalendar: React.FC = () => {
   const [tab, setTab] = useState<'HISTORY' | 'CALENDAR'>('CALENDAR');
   const [calendarMode, setCalendarMode] = useState<'MONTHLY' | 'WEEKLY' | 'DAILY'>('MONTHLY');
@@ -11,14 +15,15 @@ export const HistoryAndCalendar: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLog, setSelectedLog] = useState<StatusPost | null>(null);
   const [history, setHistory] = useState<StatusPost[]>([]);
+  const [scheduled, setScheduled] = useState<StatusPost[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiClient
-      .listPostHistory()
-      .then(({ posts }) => setHistory(posts ?? []))
-      .catch(() => setHistory([]))
-      .finally(() => setLoading(false));
+    Promise.allSettled([apiClient.listPostHistory(), apiClient.listScheduledPosts()]).then(([historyRes, scheduledRes]) => {
+      setHistory(historyRes.status === 'fulfilled' ? historyRes.value.posts ?? [] : []);
+      setScheduled(scheduledRes.status === 'fulfilled' ? scheduledRes.value.posts ?? [] : []);
+      setLoading(false);
+    });
   }, []);
 
   const filteredHistory = history.filter(item => {
@@ -26,6 +31,19 @@ export const HistoryAndCalendar: React.FC = () => {
     const matchesSearch = (item.caption ?? '').toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFilter && matchesSearch;
   });
+
+  // Calendar views plot every post (past and upcoming) by its real scheduledAt date.
+  const allPosts = [...history, ...scheduled];
+  const today = new Date();
+  const postsOnDay = (day: Date) => allPosts.filter((p) => isSameDay(new Date(p.scheduledAt), day));
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - today.getDay());
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    return d;
+  });
+  const todaysPosts = postsOnDay(today).sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
 
   return (
     <div className="space-y-8">
@@ -64,7 +82,7 @@ export const HistoryAndCalendar: React.FC = () => {
           {/* Calendar Toolbar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="text-lg font-bold text-white">July 2026</span>
+              <span className="text-lg font-bold text-white">{today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
               <span className="text-xs text-zinc-400 font-mono">(Africa/Lagos)</span>
             </div>
 
@@ -96,14 +114,25 @@ export const HistoryAndCalendar: React.FC = () => {
                 ))}
               </div>
               <div className="grid grid-cols-7 gap-1 sm:gap-2">
-                {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-                  <div
-                    key={day}
-                    className="h-12 sm:h-20 md:h-24 p-1 sm:p-2 rounded-lg sm:rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col justify-between hover:border-emerald-500/50 transition-all cursor-pointer"
-                  >
-                    <span className="text-[9px] sm:text-[11px] font-semibold text-zinc-400">{day}</span>
-                  </div>
-                ))}
+                {Array.from(
+                  { length: new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() },
+                  (_, i) => new Date(today.getFullYear(), today.getMonth(), i + 1),
+                ).map(day => {
+                  const dayPosts = postsOnDay(day);
+                  return (
+                    <div
+                      key={day.getDate()}
+                      className={`h-12 sm:h-20 md:h-24 p-1 sm:p-2 rounded-lg sm:rounded-xl border flex flex-col justify-between hover:border-emerald-500/50 transition-all cursor-pointer ${
+                        isSameDay(day, today) ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-zinc-950/60 border-zinc-800'
+                      }`}
+                    >
+                      <span className="text-[9px] sm:text-[11px] font-semibold text-zinc-400">{day.getDate()}</span>
+                      {dayPosts.length > 0 && (
+                        <span className="text-[9px] sm:text-[10px] font-semibold text-emerald-400 truncate">{dayPosts.length} post{dayPosts.length === 1 ? '' : 's'}</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -113,25 +142,43 @@ export const HistoryAndCalendar: React.FC = () => {
                horizontally (day-by-day, like a mobile calendar's week view) instead of
                squeezing all 7 columns down to unreadable widths. */
             <div className="flex sm:grid sm:grid-cols-7 gap-4 overflow-x-auto sm:overflow-visible -mx-1 px-1 sm:mx-0 sm:px-0">
-              {['Sun 26', 'Mon 27', 'Tue 28', 'Wed 29', 'Thu 30', 'Fri 31', 'Sat 01'].map((dayStr, i) => (
-                <div key={i} className="min-w-[140px] sm:min-w-0 flex-1 sm:flex-none p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3 min-h-[280px]">
-                  <div className="text-xs font-bold text-white border-b border-zinc-800 pb-2">{dayStr}</div>
-                </div>
-              ))}
+              {weekDays.map((day, i) => {
+                const dayPosts = postsOnDay(day);
+                return (
+                  <div key={i} className="min-w-[140px] sm:min-w-0 flex-1 sm:flex-none p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3 min-h-[280px]">
+                    <div className="text-xs font-bold text-white border-b border-zinc-800 pb-2">
+                      {day.toLocaleDateString('en-US', { weekday: 'short' })} {day.getDate()}
+                    </div>
+                    {dayPosts.length === 0 ? (
+                      <div className="text-[11px] text-zinc-500">No posts</div>
+                    ) : (
+                      dayPosts.map((p) => (
+                        <div key={p.id} className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300 truncate">
+                          {new Date(p.scheduledAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · {p.caption || p.mediaType}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
           {calendarMode === 'DAILY' && (
             <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-4">
-              <div className="text-sm font-bold text-white">Daily Schedule Overview</div>
-              <div className="space-y-2">
-                {[9, 12, 14, 18, 21].map(hour => (
-                  <div key={hour} className="flex items-center gap-4 py-2 border-b border-zinc-800/60 text-xs">
-                    <span className="w-16 font-mono text-zinc-400">{hour}:00</span>
-                    <div className="flex-1 p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300">No posts scheduled</div>
-                  </div>
-                ))}
-              </div>
+              <div className="text-sm font-bold text-white">Today · {today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+              {todaysPosts.length === 0 ? (
+                <div className="text-xs text-zinc-500 py-4 text-center">No posts scheduled today.</div>
+              ) : (
+                <div className="space-y-2">
+                  {todaysPosts.map((p) => (
+                    <div key={p.id} className="flex items-center gap-4 py-2 border-b border-zinc-800/60 text-xs">
+                      <span className="w-16 font-mono text-zinc-400">{new Date(p.scheduledAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                      <div className="flex-1 p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 truncate">{p.caption || `${p.mediaType} status`}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

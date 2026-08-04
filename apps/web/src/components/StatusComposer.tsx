@@ -49,8 +49,11 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
   };
 
   const handleSaveDraft = () => {
-    setSaveStatusMessage('Draft saved successfully!');
-    setTimeout(() => setSaveStatusMessage(null), 3000);
+    // There's no draft-persistence endpoint yet — POST /posts requires a future scheduledAt
+    // and always enqueues a publish job, so a draft can't actually be saved server-side.
+    // Say so rather than claiming success for something that didn't happen.
+    setSaveStatusMessage("Draft saving isn't available yet — schedule the post below to save it, or finish composing before navigating away.");
+    setTimeout(() => setSaveStatusMessage(null), 4000);
   };
 
   const handleScheduleSubmit = async (e: React.FormEvent) => {

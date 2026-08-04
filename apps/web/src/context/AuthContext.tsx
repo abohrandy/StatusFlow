@@ -14,8 +14,6 @@ function attributePendingReferral() {
   });
 }
 
-const SUPER_ADMIN_EMAILS = ['abohrandy@gmail.com'];
-
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -38,12 +36,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // isAdmin reflects the real ADMIN role from the database (surfaced via GET /profile),
+  // not a hardcoded email list — the backend's requireAdmin middleware is the actual
+  // authorization boundary either way, but a client-side-only email allowlist meant this
+  // nav item silently wouldn't appear for any admin account not baked into this bundle.
+  const refreshAdminStatus = (currentUser: User | null) => {
+    if (!currentUser) {
+      setIsAdmin(false);
+      return;
+    }
+    apiClient.getProfile().then((profile) => setIsAdmin(profile.role === 'ADMIN')).catch(() => setIsAdmin(false));
+  };
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      setIsAdmin(currentUser?.email ? SUPER_ADMIN_EMAILS.includes(currentUser.email.toLowerCase()) : false);
+      refreshAdminStatus(currentUser);
       setLoading(false);
       if (currentUser) attributePendingReferral();
     });
@@ -52,7 +62,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(session);
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      setIsAdmin(currentUser?.email ? SUPER_ADMIN_EMAILS.includes(currentUser.email.toLowerCase()) : false);
+      refreshAdminStatus(currentUser);
       setLoading(false);
       if (currentUser) attributePendingReferral();
     });

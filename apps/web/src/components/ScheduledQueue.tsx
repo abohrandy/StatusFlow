@@ -138,7 +138,7 @@ export const ScheduledQueue: React.FC = () => {
         <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-6">
           <div className="flex justify-between items-center">
             <h3 className="font-semibold text-base text-white">Calendar Schedule View ({selectedTimezone})</h3>
-            <span className="text-xs text-zinc-400">July 2026</span>
+            <span className="text-xs text-zinc-400">{new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
           </div>
 
           <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center text-[10px] sm:text-xs font-semibold text-zinc-400 pb-2 border-b border-zinc-800">
@@ -151,11 +151,25 @@ export const ScheduledQueue: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-7 gap-1 sm:gap-2">
-            {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-              <div key={day} className="h-12 sm:h-16 md:h-20 p-1 sm:p-2 rounded-lg sm:rounded-xl bg-zinc-950/60 border border-zinc-800/80 flex flex-col justify-between text-left">
-                <span className="text-[9px] sm:text-[11px] font-semibold text-zinc-400">{day}</span>
-              </div>
-            ))}
+            {(() => {
+              const now = new Date();
+              const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+              return Array.from({ length: daysInMonth }, (_, i) => new Date(now.getFullYear(), now.getMonth(), i + 1)).map((day) => {
+                const dayPosts = schedules.filter((s) => {
+                  const scheduledDate = new Date(s.scheduledAt);
+                  return scheduledDate.getFullYear() === day.getFullYear() && scheduledDate.getMonth() === day.getMonth() && scheduledDate.getDate() === day.getDate();
+                });
+                const isToday = day.toDateString() === now.toDateString();
+                return (
+                  <div key={day.getDate()} className={`h-12 sm:h-16 md:h-20 p-1 sm:p-2 rounded-lg sm:rounded-xl border flex flex-col justify-between text-left ${isToday ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-zinc-950/60 border-zinc-800/80'}`}>
+                    <span className="text-[9px] sm:text-[11px] font-semibold text-zinc-400">{day.getDate()}</span>
+                    {dayPosts.length > 0 && (
+                      <span className="text-[9px] sm:text-[10px] font-semibold text-emerald-400 truncate">{dayPosts.length} post{dayPosts.length === 1 ? '' : 's'}</span>
+                    )}
+                  </div>
+                );
+              });
+            })()}
           </div>
         </div>
       )}

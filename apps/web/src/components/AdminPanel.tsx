@@ -141,29 +141,17 @@ export const AdminPanel: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
             <h3 className="font-semibold text-base text-white">Worker Process Daemon Nodes</h3>
-            <div className="space-y-3">
-              {[
-                { name: 'worker-node-railway-prod-1', status: 'ONLINE', uptime: '99.98%', jobsProcessed: 14209 },
-                { name: 'worker-node-railway-prod-2', status: 'ONLINE', uptime: '99.95%', jobsProcessed: 11840 }
-              ].map((w, i) => (
-                <div key={i} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold text-sm text-white">{w.name}</div>
-                    <div className="text-xs text-zinc-400 mt-0.5">Uptime: {w.uptime} • Processed: {w.jobsProcessed} jobs</div>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold border border-emerald-500/20">
-                    {w.status}
-                  </span>
-                </div>
-              ))}
+            <div className="py-8 text-center border-2 border-dashed border-zinc-800 rounded-xl space-y-2">
+              <div className="text-sm font-semibold text-zinc-300">Not available yet</div>
+              <div className="text-xs text-zinc-500">Live worker-node status isn't wired up — there's no backend endpoint reporting it. Check Railway's dashboard directly for now.</div>
             </div>
           </div>
 
           <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
             <h3 className="font-semibold text-base text-white">Dead-Letter Queue (DLQ) Monitoring</h3>
             <div className="py-8 text-center border-2 border-dashed border-zinc-800 rounded-xl space-y-2">
-              <div className="text-emerald-400 text-lg font-bold">0 Dead-Letter Jobs</div>
-              <div className="text-xs text-zinc-400">All delayed worker jobs are executing cleanly with zero unrecoverable errors.</div>
+              <div className="text-sm font-semibold text-zinc-300">Not available yet</div>
+              <div className="text-xs text-zinc-500">Real BullMQ queue health isn't surfaced here yet — there's no admin endpoint for it.</div>
             </div>
           </div>
         </div>
@@ -173,10 +161,9 @@ export const AdminPanel: React.FC = () => {
       {activeTab === 'audit' && (
         <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
           <h3 className="font-semibold text-base text-white">Platform System Audit Logs</h3>
-          <div className="space-y-2 font-mono text-[11px] text-zinc-400 bg-zinc-950 p-4 rounded-xl border border-zinc-800">
-            <div>[2026-07-28 10:14:02] ADMIN: Super Admin abohrandy@gmail.com viewed platform intelligence panel.</div>
-            <div>[2026-07-28 09:58:12] WORKER: Worker node worker-node-railway-prod-1 started Redis listener.</div>
-            <div>[2026-07-28 08:30:00] PAYSTACK: Webhook event charge.success processed for ref pstk_ref_9821a.</div>
+          <div className="py-8 text-center border-2 border-dashed border-zinc-800 rounded-xl space-y-2">
+            <div className="text-sm font-semibold text-zinc-300">Not available yet</div>
+            <div className="text-xs text-zinc-500">There's no audit-log table or instrumentation behind this yet. Real Paystack webhook deliveries are already tracked — see the Webhooks tab.</div>
           </div>
         </div>
       )}

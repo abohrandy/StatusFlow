@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { ApiError } from '@statusflow/api-client';
 import { apiClient } from '../lib/apiClient';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 
 export const UserSettings: React.FC = () => {
+  const { user } = useAuth();
   const [activeSubTab, setActiveSubTab] = useState<'profile' | 'security' | 'preferences' | 'privacy'>('profile');
 
   // Form States
@@ -10,14 +13,14 @@ export const UserSettings: React.FC = () => {
   const [companyName, setCompanyName] = useState('');
   const [timezone, setTimezone] = useState('Africa/Lagos');
   const [savingProfile, setSavingProfile] = useState(false);
-  const [notifyOnDisconnect, setNotifyOnDisconnect] = useState(true);
-  const [notifyOnFailure, setNotifyOnFailure] = useState(true);
-  const [notifyOnRenewal, setNotifyOnRenewal] = useState(true);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
 
   useEffect(() => {
     apiClient.getProfile().then((profile) => {
       if (profile.fullName) setFullName(profile.fullName);
       if (profile.companyName) setCompanyName(profile.companyName);
+      if (profile.timezone) setTimezone(profile.timezone);
     }).catch(() => undefined);
   }, []);
 
@@ -26,7 +29,6 @@ export const UserSettings: React.FC = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const triggerToast = (msg: string) => {
@@ -38,7 +40,7 @@ export const UserSettings: React.FC = () => {
     e.preventDefault();
     setSavingProfile(true);
     try {
-      await apiClient.saveProfile(fullName, companyName);
+      await apiClient.saveProfile(fullName, companyName, timezone);
       triggerToast('Profile and organization settings updated successfully!');
     } catch (err) {
       triggerToast(err instanceof ApiError ? err.message : 'Could not save profile changes. Please try again.');
@@ -47,32 +49,65 @@ export const UserSettings: React.FC = () => {
     }
   };
 
-  const handlePasswordChange = (e: React.FormEvent) => {
+  const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
       triggerToast('Error: New password and confirmation do not match.');
       return;
     }
-    triggerToast('Security settings updated! Password changed successfully.');
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
+    if (!user?.email) {
+      triggerToast('Could not verify your account. Please sign in again.');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      // Verify the current password before changing it — supabase.auth.updateUser() would
+      // otherwise happily change the password for anyone with an active session, with no
+      // check that they actually know the old one.
+      const { error: reauthError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword });
+      if (reauthError) {
+        triggerToast('Current password is incorrect.');
+        return;
+      }
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateError) {
+        triggerToast(updateError.message);
+        return;
+      }
+      triggerToast('Password changed successfully.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
-  const handleExportData = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
-      user: { fullName, companyName, timezone },
-      schedulesCount: 14,
-      mediaCount: 3,
-      exportDate: new Date().toISOString()
-    }));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "statusflow_user_data.json");
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-    triggerToast('User data archive exported as statusflow_user_data.json');
+  const handleExportData = async () => {
+    setExportingData(true);
+    try {
+      const [scheduled, history, media] = await Promise.all([
+        apiClient.listScheduledPosts().catch(() => ({ posts: [] })),
+        apiClient.listPostHistory().catch(() => ({ posts: [] })),
+        apiClient.listMedia().catch(() => ({ media: [] })),
+      ]);
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
+        user: { fullName, companyName, timezone },
+        scheduledPosts: scheduled.posts,
+        postHistory: history.posts,
+        media: media.media,
+        exportDate: new Date().toISOString(),
+      }, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "statusflow_user_data.json");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      triggerToast('User data archive exported as statusflow_user_data.json');
+    } finally {
+      setExportingData(false);
+    }
   };
 
   return (
@@ -204,9 +239,10 @@ export const UserSettings: React.FC = () => {
 
           <button
             type="submit"
-            className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 font-semibold text-zinc-950 text-xs rounded-xl transition-all shadow-lg shadow-emerald-500/20"
+            disabled={changingPassword}
+            className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 font-semibold text-zinc-950 text-xs rounded-xl transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-60"
           >
-            Update Security Password
+            {changingPassword ? 'Updating...' : 'Update Security Password'}
           </button>
         </form>
       )}
@@ -215,8 +251,12 @@ export const UserSettings: React.FC = () => {
       {activeSubTab === 'preferences' && (
         <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-6 max-w-2xl">
           <h3 className="font-bold text-base text-white border-b border-zinc-800 pb-3">Notification & WhatsApp Session Controls</h3>
+          <p className="text-xs text-zinc-500 -mt-2">
+            Per-alert notification preferences aren't available yet — you'll get all WhatsApp disconnection, broadcast-failure, and
+            renewal notifications in the Notifications panel until this ships.
+          </p>
 
-          <div className="space-y-4">
+          <div className="space-y-4 opacity-50 pointer-events-none">
             <div className="flex items-center justify-between p-4 rounded-xl bg-zinc-950 border border-zinc-800">
               <div>
                 <div className="text-sm font-semibold text-white">WhatsApp Disconnection Alerts</div>
@@ -224,8 +264,8 @@ export const UserSettings: React.FC = () => {
               </div>
               <input
                 type="checkbox"
-                checked={notifyOnDisconnect}
-                onChange={(e) => setNotifyOnDisconnect(e.target.checked)}
+                checked
+                disabled
                 className="w-4 h-4 accent-emerald-500 cursor-pointer"
               />
             </div>
@@ -237,8 +277,8 @@ export const UserSettings: React.FC = () => {
               </div>
               <input
                 type="checkbox"
-                checked={notifyOnFailure}
-                onChange={(e) => setNotifyOnFailure(e.target.checked)}
+                checked
+                disabled
                 className="w-4 h-4 accent-emerald-500 cursor-pointer"
               />
             </div>
@@ -250,8 +290,8 @@ export const UserSettings: React.FC = () => {
               </div>
               <input
                 type="checkbox"
-                checked={notifyOnRenewal}
-                onChange={(e) => setNotifyOnRenewal(e.target.checked)}
+                checked
+                disabled
                 className="w-4 h-4 accent-emerald-500 cursor-pointer"
               />
             </div>
@@ -269,41 +309,20 @@ export const UserSettings: React.FC = () => {
             <p className="text-xs text-zinc-400">Download a JSON copy of all your profile, schedule, and media metadata.</p>
             <button
               onClick={handleExportData}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl border border-zinc-700 transition-all"
+              disabled={exportingData}
+              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl border border-zinc-700 transition-all disabled:opacity-60"
             >
-              📥 Download Data Export (JSON)
+              {exportingData ? 'Preparing export...' : '📥 Download Data Export (JSON)'}
             </button>
           </div>
 
           <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 space-y-3">
             <div className="text-sm font-semibold text-red-400">Danger Zone: Delete Account</div>
-            <p className="text-xs text-zinc-400">Permanently remove your account, encrypted WhatsApp session keys, and scheduled statuses.</p>
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold text-xs rounded-xl transition-all"
-            >
-              Delete Account & Wiping Data
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Lightbox Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 bg-zinc-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4">
-            <h3 className="font-bold text-base text-white">Confirm Permanent Account Deletion</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              This action cannot be undone. All your schedules, media assets, encrypted Baileys session keys, and Paystack subscription records will be wiped.
+            <p className="text-xs text-zinc-400">
+              Self-service account deletion isn't available yet. To permanently delete your account, WhatsApp session, and
+              scheduled statuses, disconnect WhatsApp from the Pairing screen first, then contact an administrator to request
+              deletion.
             </p>
-            <div className="flex justify-end gap-3 pt-2">
-              <button onClick={() => setShowDeleteModal(false)} className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded-xl text-xs font-medium">
-                Cancel
-              </button>
-              <button onClick={() => { setShowDeleteModal(false); triggerToast('Account deletion request queued.'); }} className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl text-xs">
-                Confirm Delete Account
-              </button>
-            </div>
           </div>
         </div>
       )}
