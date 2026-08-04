@@ -19,6 +19,13 @@ export interface StatusPost {
   createdAt: string;
 }
 
+export interface QueueLog {
+  id: string;
+  attemptNumber: number;
+  message: string;
+  createdAt: string;
+}
+
 export interface CreateStatusPostInput {
   mediaType: StatusPost['mediaType'];
   scheduledAt: string;
@@ -150,6 +157,11 @@ export class ApiClient {
   /** Only succeeds while the post is still DRAFT/SCHEDULED/QUEUED — throws `ApiError` (404) once it's sending or resolved. */
   cancelStatusPost(id: string) {
     return this.request<{ post: StatusPost }>(`/posts/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+  }
+
+  /** Real per-attempt worker execution logs for a post — not a synthesized/placeholder message. */
+  getPostLogs(id: string) {
+    return this.request<{ logs: QueueLog[] }>(`/posts/${encodeURIComponent(id)}/logs`);
   }
 
   // --- Media ---------------------------------------------------------------

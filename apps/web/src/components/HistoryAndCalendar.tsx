@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { StatusPost } from '@statusflow/api-client';
+import type { QueueLog, StatusPost } from '@statusflow/api-client';
 import { apiClient } from '../lib/apiClient';
 
 type HistoryStatus = 'COMPLETED' | 'FAILED' | 'CANCELLED';
@@ -14,6 +14,8 @@ export const HistoryAndCalendar: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'ALL' | HistoryStatus>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLog, setSelectedLog] = useState<StatusPost | null>(null);
+  const [postLogs, setPostLogs] = useState<QueueLog[] | null>(null);
+  const [postLogsLoading, setPostLogsLoading] = useState(false);
   const [history, setHistory] = useState<StatusPost[]>([]);
   const [scheduled, setScheduled] = useState<StatusPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,6 +27,19 @@ export const HistoryAndCalendar: React.FC = () => {
       setLoading(false);
     });
   }, []);
+
+  useEffect(() => {
+    if (!selectedLog) {
+      setPostLogs(null);
+      return;
+    }
+    setPostLogsLoading(true);
+    apiClient
+      .getPostLogs(selectedLog.id)
+      .then(({ logs }) => setPostLogs(logs))
+      .catch(() => setPostLogs([]))
+      .finally(() => setPostLogsLoading(false));
+  }, [selectedLog]);
 
   const filteredHistory = history.filter(item => {
     const matchesFilter = statusFilter === 'ALL' || item.status === statusFilter;
@@ -265,8 +280,19 @@ export const HistoryAndCalendar: React.FC = () => {
             <div className="space-y-2 text-xs">
               <div className="text-zinc-400">Post ID: <span className="font-mono text-white">{selectedLog.id}</span></div>
               <div className="text-zinc-400">Scheduled: <span className="text-white">{new Date(selectedLog.scheduledAt).toLocaleString()}</span></div>
-              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 font-mono text-[11px] text-zinc-300 leading-relaxed">
-                {selectedLog.errorMessage ?? 'Published successfully via WhatsApp status broadcast.'}
+              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 font-mono text-[11px] text-zinc-300 leading-relaxed space-y-1.5 max-h-64 overflow-y-auto">
+                {postLogsLoading ? (
+                  <div className="text-zinc-500">Loading execution logs...</div>
+                ) : !postLogs || postLogs.length === 0 ? (
+                  <div className="text-zinc-500">No execution logs recorded for this post yet.</div>
+                ) : (
+                  postLogs.map((log) => (
+                    <div key={log.id}>
+                      <span className="text-zinc-500">[{new Date(log.createdAt).toLocaleTimeString()} · attempt {log.attemptNumber}]</span>{' '}
+                      {log.message}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 

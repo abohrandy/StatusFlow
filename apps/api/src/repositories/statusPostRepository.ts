@@ -75,6 +75,25 @@ export async function getStatusPostByIdForUser(id: string, userId: string): Prom
   return result.rows[0] ?? null;
 }
 
+export interface QueueLogRow {
+  id: string;
+  attempt_number: number;
+  log_message: string;
+  created_at: string;
+}
+
+/** Real per-attempt worker logs for a post (see apps/worker's recordQueueLog) — scoped through
+ * status_posts so a user can't read another user's post's logs by guessing a post id. */
+export async function getQueueLogsForUserPost(postId: string, userId: string): Promise<QueueLogRow[] | null> {
+  const owns = await pool.query('SELECT 1 FROM status_posts WHERE id = $1 AND user_id = $2', [postId, userId]);
+  if (owns.rows.length === 0) return null;
+  const result = await pool.query<QueueLogRow>(
+    `SELECT id, attempt_number, log_message, created_at FROM queue_logs WHERE post_id = $1 ORDER BY created_at ASC`,
+    [postId],
+  );
+  return result.rows;
+}
+
 /** Only cancellable while still pending — a post already being processed or resolved can't be pulled back. */
 export async function cancelStatusPost(id: string, userId: string): Promise<StatusPostRow | null> {
   const result = await pool.query<StatusPostRow>(

@@ -6,6 +6,7 @@ import { getLatestSession } from '../repositories/whatsappRepository';
 import {
   cancelStatusPost,
   createStatusPost,
+  getQueueLogsForUserPost,
   getStatusPostByIdForUser,
   getStatusPostsForUser,
   type MediaType,
@@ -87,6 +88,16 @@ postsRouter.get('/', asyncHandler(async (req, res) => {
 postsRouter.get('/history', asyncHandler(async (req, res) => {
   const posts = await getStatusPostsForUser(req.user!.id, ['COMPLETED', 'FAILED', 'CANCELLED']);
   res.json({ posts: posts.map(mapPost) });
+}));
+
+postsRouter.get('/:id/logs', asyncHandler(async (req, res) => {
+  const logs = await getQueueLogsForUserPost(req.params.id, req.user!.id);
+  if (logs === null) {
+    return res.status(404).json({ error: 'No post found with that id.' });
+  }
+  res.json({
+    logs: logs.map((l) => ({ id: l.id, attemptNumber: l.attempt_number, message: l.log_message, createdAt: l.created_at })),
+  });
 }));
 
 postsRouter.post('/:id/cancel', asyncHandler(async (req, res) => {
