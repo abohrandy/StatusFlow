@@ -42,6 +42,9 @@ export const WhatsAppPairing: React.FC = () => {
       setSessionId(result.sessionId);
       setPairingCode(result.pairingCode ?? null);
       setQrCode(result.qrCode ?? null);
+      // Copied immediately — WhatsApp's own code expiry is short, and pasting is faster
+      // and less error-prone than reading and typing 8 characters under time pressure.
+      if (result.pairingCode) navigator.clipboard?.writeText(result.pairingCode).catch(() => {});
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not request a pairing code. Please try again.');
     } finally {
@@ -95,6 +98,11 @@ export const WhatsAppPairing: React.FC = () => {
             <button type="button" onClick={() => { setMethod('QR_CODE'); setPairingCode(null); setQrCode(null); }} className={`flex-1 py-2 text-xs font-semibold rounded-lg ${method === 'QR_CODE' ? 'bg-emerald-500 text-zinc-950' : 'text-zinc-400'}`}>QR Code</button>
           </div>
           {method === 'PAIRING_CODE' && !pairingCode ? <form onSubmit={handleGenerateCode} className="space-y-4">
+            <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-xs text-zinc-400">
+              <span className="font-semibold text-emerald-400">Before you request a code: </span>
+              WhatsApp's code expires quickly. Open WhatsApp on your phone now and navigate to Settings → Linked Devices →
+              Link a Device → Link with Phone Number instead, so you're ready to enter it the instant it appears.
+            </div>
             <label className="text-xs font-medium text-zinc-400">WhatsApp Phone Number (with Country Code)
               <input type="text" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full mt-1.5 px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm" placeholder="+234" required />
             </label>
@@ -102,6 +110,7 @@ export const WhatsAppPairing: React.FC = () => {
           </form> : method === 'PAIRING_CODE' ? <div className="text-center space-y-4 py-4">
             <div className="text-xs text-zinc-400">Open WhatsApp → Linked Devices → Link with Phone Number</div>
             <div className="p-6 rounded-2xl bg-zinc-950 border border-emerald-500/30 text-3xl font-mono tracking-widest text-emerald-400 font-bold">{pairingCode}</div>
+            <div className="text-xs text-emerald-400">Copied to clipboard — paste it into WhatsApp</div>
             <div className="text-xs text-amber-400">Waiting for WhatsApp to confirm the pairing...</div>
             <div className="text-xs text-zinc-500">Codes expire quickly — if WhatsApp says it couldn't link, get a fresh one below rather than retyping the old one.</div>
             <button type="button" onClick={handleGenerateCode} disabled={loading} className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 underline underline-offset-2">{loading ? 'Requesting Code...' : 'Get a new code'}</button>

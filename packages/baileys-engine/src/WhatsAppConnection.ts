@@ -15,6 +15,23 @@ export interface SendStatusInput {
 
 const logger = pino({ level: process.env.BAILEYS_LOG_LEVEL || 'warn' });
 
+// A pairing-code user is racing WhatsApp's own short-lived code expiry the moment they tap
+// "Request Code" — every millisecond spent before the code is even generated eats into that
+// window. Re-fetching WhatsApp's current protocol version over the network on every single
+// connection attempt was pure latency for no benefit (it rarely changes); cache it for an
+// hour so only the first connection in a while pays that cost.
+let cachedVersion: { version: [number, number, number]; fetchedAt: number } | null = null;
+const VERSION_CACHE_TTL_MS = 60 * 60 * 1000;
+
+async function getBaileysVersion(): Promise<[number, number, number]> {
+  if (cachedVersion && Date.now() - cachedVersion.fetchedAt < VERSION_CACHE_TTL_MS) {
+    return cachedVersion.version;
+  }
+  const { version } = await fetchLatestBaileysVersion({ timeout: 5_000 });
+  cachedVersion = { version, fetchedAt: Date.now() };
+  return version;
+}
+
 /**
  * Wraps one WhatsApp multi-device connection (one `whatsapp_sessions` row). Real
  * `@whiskeysockets/baileys` underneath — see redisAuthState.ts for why auth state lives
@@ -49,8 +66,9 @@ export class WhatsAppConnection extends EventEmitter {
       // versions (no error, the socket just never reaches 'open' or emits a QR), which is
       // indistinguishable from a network failure. Fetching the current version keeps new
       // connections working without needing to bump the dependency; falls back to the
-      // bundled version (previous behavior) if the fetch itself fails.
-      const { version } = await fetchLatestBaileysVersion({ timeout: 5_000 });
+      // bundled version (previous behavior) if the fetch itself fails. Cached (see
+      // getBaileysVersion above) so this costs a network round-trip only once an hour.
+      const version = await getBaileysVersion();
       const sock = makeWASocket({
         auth: state,
         logger,

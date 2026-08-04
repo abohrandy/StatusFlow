@@ -1,11 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import axios from 'axios';
 import { Card, SegmentedControl, TopAppBar } from '../components';
 import { Colors, Radius, Spacing, Typography } from '../theme';
 import { apiClient } from '../lib/apiClient';
+
+// WhatsApp's own server-side pairing code expiry is short — every second between the code
+// appearing and it being typed into WhatsApp counts. There's no documented deep link straight
+// to "Settings > Linked Devices > Link with Phone Number", so this just brings WhatsApp to the
+// foreground (skipping any home-screen hunting) rather than the exact screen.
+const WHATSAPP_URL = 'whatsapp://';
+const openWhatsApp = () => {
+  Linking.openURL(WHATSAPP_URL).catch(() => {
+    Alert.alert('WhatsApp not found', 'Make sure WhatsApp is installed on this phone.');
+  });
+};
 
 type PairingMethod = 'code' | 'qr';
 
@@ -84,6 +96,10 @@ export default function PairingScreen() {
       const { data } = await apiClient.post('/whatsapp/pairing/request', { phoneNumber, method: 'PAIRING_CODE' });
       setSessionId(data.sessionId);
       setPairingCode(data.pairingCode);
+      // Copied immediately, not on a tap — every second matters against WhatsApp's own
+      // short-lived code expiry, and a long-press-to-paste is faster and less error-prone
+      // than reading and typing 8 characters under time pressure.
+      Clipboard.setStringAsync(data.pairingCode).catch(() => {});
     } catch (err) {
       const message = axios.isAxiosError(err) ? err.response?.data?.error : null;
       Alert.alert('Could not connect', message ?? 'Please try again.');
@@ -225,6 +241,17 @@ export default function PairingScreen() {
               <Card style={styles.section}>
                 {!pairingCode ? (
                   <View style={styles.formGroup}>
+                    <View style={styles.primeBox}>
+                      <Text style={styles.primeTitle}>Before you request a code</Text>
+                      <Text style={styles.primeBody}>
+                        WhatsApp's code expires quickly. Open WhatsApp now and navigate to Settings → Linked Devices → Link a
+                        Device → Link with Phone Number instead, so you're ready to type it the instant it appears.
+                      </Text>
+                      <Pressable style={styles.openWhatsAppButton} onPress={openWhatsApp}>
+                        <MaterialIcons name="open-in-new" size={16} color={Colors.primary} />
+                        <Text style={styles.openWhatsAppLabel}>Open WhatsApp now</Text>
+                      </Pressable>
+                    </View>
                     <Text style={styles.label}>WHATSAPP PHONE NUMBER</Text>
                     <TextInput
                       style={styles.input}
@@ -248,6 +275,11 @@ export default function PairingScreen() {
                     <View style={styles.codeBox}>
                       <Text style={styles.codeText}>{pairingCode}</Text>
                     </View>
+                    <Text style={styles.copiedLabel}>Copied to clipboard — paste it into WhatsApp</Text>
+                    <Pressable style={styles.openWhatsAppButton} onPress={openWhatsApp}>
+                      <MaterialIcons name="open-in-new" size={16} color={Colors.primary} />
+                      <Text style={styles.openWhatsAppLabel}>Open WhatsApp</Text>
+                    </Pressable>
                     <View style={styles.waitingRow}>
                       <ActivityIndicator color={Colors.primary} />
                       <Text style={styles.waitingLabel}>Waiting for WhatsApp to confirm the pairing...</Text>
@@ -396,6 +428,43 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   formGroup: { gap: Spacing.sm },
+  primeBox: {
+    backgroundColor: `${Colors.primary}0D`,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}33`,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  primeTitle: {
+    ...Typography.labelMd,
+    color: Colors.onSurface,
+  },
+  primeBody: {
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
+  },
+  openWhatsAppButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  openWhatsAppLabel: {
+    ...Typography.labelMd,
+    color: Colors.primary,
+  },
+  copiedLabel: {
+    ...Typography.bodySm,
+    color: Colors.primary,
+  },
   label: {
     ...Typography.labelSm,
     color: Colors.onSurfaceVariant,
