@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { pool } from '../db';
 import { describeError } from '../utils/describeError';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
@@ -10,10 +11,15 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 // (`supabase.auth.getUser(jwt)`); the anon key is safe to use server-side for this.
 const supabaseAuthClient = createClient(supabaseUrl, supabaseAnonKey);
 
+export type UserRole = 'USER' | 'ADMIN' | 'SUPER_ADMIN';
+export type AdminScope = 'BILLING' | 'USERS' | 'OPS';
+
 export interface AuthenticatedUser {
   id: string;
   email: string;
-  role: 'USER' | 'ADMIN';
+  role: UserRole;
+  /** Only populated for ADMIN (by requireAdmin) — SUPER_ADMIN implicitly has every scope. */
+  adminScopes?: AdminScope[];
 }
 
 declare global {
@@ -51,7 +57,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
     const { id, email } = data.user;
 
-    const result = await pool.query<{ role: 'USER' | 'ADMIN' }>(
+    const result = await pool.query<{ role: UserRole }>(
       `INSERT INTO users (id, email)
        VALUES ($1, $2)
        ON CONFLICT (email) DO UPDATE SET id = EXCLUDED.id
@@ -70,9 +76,42 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 }
 
 
-export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (req.user?.role !== 'ADMIN') {
+/**
+ * Gates the whole Admin Panel to ADMIN and SUPER_ADMIN. For a plain ADMIN, also loads
+ * their delegated department scopes onto req.user so downstream requireScope() checks
+ * don't need their own query — SUPER_ADMIN never needs this, it implicitly has every
+ * scope (see requireScope below).
+ */
+export const requireAdmin = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  if (req.user?.role !== 'ADMIN' && req.user?.role !== 'SUPER_ADMIN') {
     return res.status(403).json({ error: 'Admin access required.' });
+  }
+  if (req.user.role === 'ADMIN') {
+    const result = await pool.query<{ scope: AdminScope }>(
+      'SELECT scope FROM admin_scopes WHERE user_id = $1',
+      [req.user.id],
+    );
+    req.user.adminScopes = result.rows.map((r) => r.scope);
+  }
+  next();
+});
+
+/** Delegated ADMINs only pass with the named scope; SUPER_ADMIN always passes. */
+export function requireScope(scope: AdminScope) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (req.user?.role === 'SUPER_ADMIN') return next();
+    if (req.user?.role === 'ADMIN' && req.user.adminScopes?.includes(scope)) return next();
+    return res.status(403).json({ error: `This requires the ${scope} admin scope.` });
+  };
+}
+
+/**
+ * Unlike requireScope, no ADMIN scope satisfies this — granting/revoking ADMIN access and
+ * department scopes is a SUPER_ADMIN-only power, not something delegable to a department.
+ */
+export function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
+  if (req.user?.role !== 'SUPER_ADMIN') {
+    return res.status(403).json({ error: 'Super Admin access required.' });
   }
   next();
 }

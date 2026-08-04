@@ -1,7 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import type { AdminScope, UserRole } from '@statusflow/api-client';
 import { apiClient } from '../lib/apiClient';
+import { useAuth } from '../context/AuthContext';
 
 type AdminTab = 'subscriptions' | 'payments' | 'invoices' | 'referrals' | 'webhooks' | 'users' | 'workers' | 'audit';
+
+// Which department scope unlocks each tab — SUPER_ADMIN sees every tab regardless.
+const TAB_SCOPE: Record<AdminTab, AdminScope> = {
+  subscriptions: 'BILLING',
+  payments: 'BILLING',
+  invoices: 'BILLING',
+  referrals: 'BILLING',
+  users: 'USERS',
+  webhooks: 'OPS',
+  workers: 'OPS',
+  audit: 'OPS',
+};
 
 interface DashboardStats {
   activeSubscriptions: number;
@@ -21,17 +35,35 @@ function fmtDate(value: string | null): string {
 }
 
 export const AdminPanel: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<AdminTab>('subscriptions');
+  const { user } = useAuth();
+  const [me, setMe] = useState<{ role: UserRole; scopes: AdminScope[] } | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [usersList, setUsersList] = useState<Array<{ id: string; email: string; plan: string; sessions: number; postsCount: number; status: string }>>([]);
+  const [usersList, setUsersList] = useState<Array<{ id: string; email: string; role: UserRole; plan: string; sessions: number; postsCount: number; scopes: AdminScope[]; status: string }>>([]);
+
+  useEffect(() => {
+    apiClient.adminGetMe().then(setMe).catch(() => {});
+  }, []);
 
   useEffect(() => {
     apiClient.adminGetDashboard().then(setStats).catch(() => {});
   }, []);
 
+  const hasScope = (scope: AdminScope) => me?.role === 'SUPER_ADMIN' || !!me?.scopes.includes(scope);
+  const visibleTabs = useMemo(
+    () => (['subscriptions', 'payments', 'invoices', 'referrals', 'webhooks', 'users', 'workers', 'audit'] as const).filter((t) => hasScope(TAB_SCOPE[t])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [me],
+  );
+  const [activeTab, setActiveTab] = useState<AdminTab | null>(null);
   useEffect(() => {
-    apiClient.adminListUsers().then(({ users }) => setUsersList(users)).catch(() => setUsersList([]));
-  }, []);
+    if (!activeTab && visibleTabs.length > 0) setActiveTab(visibleTabs[0]);
+  }, [visibleTabs, activeTab]);
+
+  const loadUsers = () => apiClient.adminListUsers().then(({ users }) => setUsersList(users)).catch(() => setUsersList([]));
+  useEffect(() => {
+    if (hasScope('USERS')) loadUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me]);
 
   return (
     <div className="space-y-8">
@@ -39,18 +71,21 @@ export const AdminPanel: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 rounded-2xl bg-gradient-to-r from-zinc-900 via-zinc-900 to-emerald-950/40 border border-emerald-500/30">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-white tracking-tight">StatusFlow Super Admin Intelligence Panel</h2>
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30">
-              abohrandy@gmail.com (Super Admin)
-            </span>
+            <h2 className="text-xl font-bold text-white tracking-tight">
+              {me?.role === 'SUPER_ADMIN' ? 'Super Admin Intelligence Panel' : 'Admin Panel'}
+            </h2>
+            {me && (
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30">
+                {user?.email ?? ''} ({me.role === 'SUPER_ADMIN' ? 'Super Admin' : `Admin: ${me.scopes.join(', ') || 'no scopes granted'}`})
+              </span>
+            )}
           </div>
           <p className="text-sm text-zinc-400 mt-1">Real-time platform metrics, subscriptions management, payment ledgers, and audit logs.</p>
         </div>
 
         {/* Tab Selector */}
         <div className="flex gap-1 p-1 bg-zinc-950 rounded-xl border border-zinc-800 overflow-x-auto md:flex-wrap">
-          {(['subscriptions', 'payments', 'invoices', 'referrals', 'webhooks', 'users', 'workers', 'audit'] as const).map((t) => (
-
+          {visibleTabs.map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
@@ -63,6 +98,12 @@ export const AdminPanel: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {visibleTabs.length === 0 && me && (
+        <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 text-center text-sm text-zinc-400">
+          You don't have any admin department scopes assigned yet. Ask a Super Admin to grant you access.
+        </div>
+      )}
 
       {/* Billing Overview — real data from /admin/dashboard */}
       <div className="space-y-3">
@@ -106,31 +147,10 @@ export const AdminPanel: React.FC = () => {
       {/* Tab: User Management */}
       {activeTab === 'users' && (
         <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
-          <h3 className="font-semibold text-base text-white mb-2">User Accounts & Subscription Overrides</h3>
+          <h3 className="font-semibold text-base text-white mb-2">User Accounts & Admin Access</h3>
           <div className="space-y-3">
             {usersList.map(u => (
-              <div key={u.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <div className="font-semibold text-sm text-white">{u.email}</div>
-                  <div className="text-xs text-zinc-400 mt-1">ID: {u.id} • Active Sockets: {u.sessions} (Strict 1-Account) • Posts Delivered: {u.postsCount}</div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <select
-                    value={u.plan}
-                    disabled
-                    onChange={() => undefined}
-                    className="px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-emerald-400 font-semibold focus:outline-none"
-                  >
-                    <option value="FREE">Free Tier</option>
-                    <option value="WEEKLY">Weekly Pro (₦2,000)</option>
-                    <option value="MONTHLY">Monthly Business (₦6,000)</option>
-                  </select>
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-mono border border-emerald-500/20">
-                    {u.status}
-                  </span>
-                </div>
-              </div>
+              <UserRow key={u.id} user={u} canManageAccess={me?.role === 'SUPER_ADMIN'} onChanged={loadUsers} />
             ))}
           </div>
         </div>
@@ -165,6 +185,114 @@ export const AdminPanel: React.FC = () => {
             <div className="text-sm font-semibold text-zinc-300">Not available yet</div>
             <div className="text-xs text-zinc-500">There's no audit-log table or instrumentation behind this yet. Real Paystack webhook deliveries are already tracked — see the Webhooks tab.</div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ALL_SCOPES: AdminScope[] = ['BILLING', 'USERS', 'OPS'];
+
+interface UserRowUser {
+  id: string;
+  email: string;
+  role: UserRole;
+  plan: string;
+  sessions: number;
+  postsCount: number;
+  scopes: AdminScope[];
+  status: string;
+}
+
+const UserRow: React.FC<{ user: UserRowUser; canManageAccess: boolean; onChanged: () => void }> = ({ user: u, canManageAccess, onChanged }) => {
+  const [editing, setEditing] = useState(false);
+  const [role, setRole] = useState<UserRole>(u.role);
+  const [scopes, setScopes] = useState<AdminScope[]>(u.scopes);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const toggleScope = (scope: AdminScope) => {
+    setScopes((prev) => (prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await apiClient.adminSetUserAccess(u.id, role, scopes);
+      setEditing(false);
+      onChanged();
+    } catch (err: any) {
+      setError(err.message || 'Could not update access.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl bg-zinc-950/60 border border-zinc-800 overflow-hidden">
+      <div className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="font-semibold text-sm text-white">{u.email}</div>
+          <div className="text-xs text-zinc-400 mt-1">ID: {u.id} • Active Sockets: {u.sessions} (Strict 1-Account) • Posts Delivered: {u.postsCount}</div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span className="px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-emerald-400 font-semibold capitalize">
+            {u.plan.replace('-', ' ')}
+          </span>
+          <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-mono border border-emerald-500/20">
+            {u.status}
+          </span>
+          {u.role === 'ADMIN' && u.scopes.length > 0 && (
+            <span className="px-2.5 py-1 rounded-full bg-zinc-800 text-zinc-300 text-[10px] font-mono border border-zinc-700">
+              {u.scopes.join(', ')}
+            </span>
+          )}
+          {canManageAccess && (
+            <button
+              onClick={() => setEditing((v) => !v)}
+              className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-medium"
+            >
+              {editing ? 'Cancel' : 'Manage Access'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {editing && (
+        <div className="border-t border-zinc-800 p-4 space-y-3 bg-zinc-950/40">
+          {error && <div className="text-xs text-red-400">{error}</div>}
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-zinc-400 font-medium">Role</span>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as UserRole)}
+              className="px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white focus:outline-none"
+            >
+              <option value="USER">User</option>
+              <option value="ADMIN">Admin (delegated)</option>
+              <option value="SUPER_ADMIN">Super Admin</option>
+            </select>
+          </div>
+          {role === 'ADMIN' && (
+            <div className="flex items-center gap-4">
+              <span className="text-xs text-zinc-400 font-medium">Department scopes</span>
+              {ALL_SCOPES.map((scope) => (
+                <label key={scope} className="flex items-center gap-1.5 text-xs text-zinc-300">
+                  <input type="checkbox" checked={scopes.includes(scope)} onChange={() => toggleScope(scope)} className="accent-emerald-500" />
+                  {scope}
+                </label>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-semibold text-xs disabled:opacity-60"
+          >
+            {saving ? 'Saving...' : 'Save Access'}
+          </button>
         </div>
       )}
     </div>

@@ -45,7 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsAdmin(false);
       return;
     }
-    apiClient.getProfile().then((profile) => setIsAdmin(profile.role === 'ADMIN')).catch(() => setIsAdmin(false));
+    apiClient.getProfile().then((profile) => setIsAdmin(profile.role === 'ADMIN' || profile.role === 'SUPER_ADMIN')).catch(() => setIsAdmin(false));
   };
 
   useEffect(() => {

@@ -37,7 +37,12 @@ export async function listUsers(limit = 100) {
             COALESCE(sub.plan_slug, 'free') AS plan,
             COALESCE(ws.sessions, 0)::int AS sessions,
             COALESCE(posts.post_count, 0)::int AS "postsCount",
-            CASE WHEN u.role = 'ADMIN' THEN 'ADMIN' ELSE 'ACTIVE' END AS status
+            COALESCE(scopes.list, ARRAY[]::admin_scope[]) AS scopes,
+            CASE
+              WHEN u.role = 'SUPER_ADMIN' THEN 'SUPER_ADMIN'
+              WHEN u.role = 'ADMIN' THEN 'ADMIN'
+              ELSE 'ACTIVE'
+            END AS status
      FROM users u
      LEFT JOIN LATERAL (
        SELECT s.plan_slug
@@ -56,11 +61,35 @@ export async function listUsers(limit = 100) {
        FROM status_posts p
        WHERE p.user_id = u.id
      ) posts ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT array_agg(a.scope) AS list
+       FROM admin_scopes a
+       WHERE a.user_id = u.id
+     ) scopes ON TRUE
      ORDER BY u.created_at DESC
      LIMIT $1`,
     [limit],
   );
   return result.rows;
+}
+
+/** SUPER_ADMIN-only: sets a user's role. Demoting away from ADMIN also clears their scopes. */
+export async function setUserRole(userId: string, role: 'USER' | 'ADMIN' | 'SUPER_ADMIN'): Promise<void> {
+  await pool.query('UPDATE users SET role = $1 WHERE id = $2', [role, userId]);
+  if (role !== 'ADMIN') {
+    await pool.query('DELETE FROM admin_scopes WHERE user_id = $1', [userId]);
+  }
+}
+
+/** SUPER_ADMIN-only: replaces a user's full set of delegated admin scopes. */
+export async function setUserScopes(userId: string, scopes: string[], grantedBy: string): Promise<void> {
+  await pool.query('DELETE FROM admin_scopes WHERE user_id = $1', [userId]);
+  if (scopes.length === 0) return;
+  const values = scopes.map((_, i) => `($1, $${i + 2}, $${scopes.length + 2})`).join(', ');
+  await pool.query(
+    `INSERT INTO admin_scopes (user_id, scope, granted_by) VALUES ${values}`,
+    [userId, ...scopes, grantedBy],
+  );
 }
 
 export async function getSubscriptionDetail(subscriptionId: string) {

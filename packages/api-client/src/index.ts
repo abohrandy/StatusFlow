@@ -1,3 +1,6 @@
+export type UserRole = 'USER' | 'ADMIN' | 'SUPER_ADMIN';
+export type AdminScope = 'BILLING' | 'USERS' | 'OPS';
+
 export interface ApiClientOptions {
   baseUrl?: string;
   /** Supplies the current Supabase session's access token, if any. Injected by the
@@ -198,6 +201,11 @@ export class ApiClient {
     }>('/admin/dashboard');
   }
 
+  /** Which Admin Panel tabs the current user may see — role plus, for a plain ADMIN, their delegated department scopes. */
+  adminGetMe() {
+    return this.request<{ role: UserRole; scopes: AdminScope[] }>('/admin/me');
+  }
+
   adminSearchSubscriptions(search = '') {
     return this.request<{ subscriptions: any[] }>(`/admin/subscriptions?search=${encodeURIComponent(search)}`);
   }
@@ -206,12 +214,21 @@ export class ApiClient {
     return this.request<{ users: Array<{
       id: string;
       email: string;
-      role: string;
+      role: UserRole;
       plan: string;
       sessions: number;
       postsCount: number;
+      scopes: AdminScope[];
       status: string;
     }> }>('/admin/users');
+  }
+
+  /** SUPER_ADMIN-only: sets a user's role and, for ADMIN, their delegated department scopes. */
+  adminSetUserAccess(userId: string, role: UserRole, scopes: AdminScope[] = []) {
+    return this.request<{ ok: boolean }>(`/admin/users/${encodeURIComponent(userId)}/access`, {
+      method: 'PUT',
+      body: JSON.stringify({ role, scopes }),
+    });
   }
 
   adminGetSubscriptionDetail(id: string) {
@@ -298,7 +315,7 @@ export class ApiClient {
   // --- Profile ---------------------------------------------------------------
 
   getProfile() {
-    return this.request<{ onboarded: boolean; fullName: string | null; companyName: string | null; timezone: string; role: 'USER' | 'ADMIN' }>('/profile');
+    return this.request<{ onboarded: boolean; fullName: string | null; companyName: string | null; timezone: string; role: UserRole }>('/profile');
   }
 
   saveProfile(fullName: string, companyName: string, timezone?: string) {

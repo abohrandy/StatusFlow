@@ -21,6 +21,6 @@ SET name = EXCLUDED.name,
 
 -- Grant Super Admin privileges to abohrandy@gmail.com
 INSERT INTO users (email, role)
-VALUES ('abohrandy@gmail.com', 'ADMIN')
+VALUES ('abohrandy@gmail.com', 'SUPER_ADMIN')
 ON CONFLICT (email) DO UPDATE
-SET role = 'ADMIN';
+SET role = 'SUPER_ADMIN';
