@@ -112,15 +112,17 @@ export class WhatsAppConnection extends EventEmitter {
       // The contact list a status broadcast can actually reach (see contactsStore.ts) —
       // 'messaging-history.set' delivers the initial batch right after connecting,
       // 'contacts.upsert'/'contacts.update' cover anything added or changed after that.
-      sock.ev.on('messaging-history.set', ({ contacts }) => {
-        void addContactJids(this.sessionId, this.redis, contacts.map((c) => c.id));
-      });
-      sock.ev.on('contacts.upsert', (contacts) => {
-        void addContactJids(this.sessionId, this.redis, contacts.map((c) => c.id));
-      });
-      sock.ev.on('contacts.update', (contacts) => {
-        void addContactJids(this.sessionId, this.redis, contacts.map((c) => c.id));
-      });
+      // `void`ing a promise only suppresses the "unused promise" lint warning — it does NOT
+      // attach a .catch(), so a rejection here (e.g. a transient Redis error) would otherwise
+      // be an unhandled rejection, which crashes the whole process by default in current Node.
+      const onContactsSeen = (contacts: Array<{ id?: string }>) => {
+        addContactJids(this.sessionId, this.redis, contacts.map((c) => c.id)).catch((err) => {
+          console.error(`[WhatsApp:${this.sessionId}] Failed to persist synced contacts:`, err instanceof Error ? err.message : err);
+        });
+      };
+      sock.ev.on('messaging-history.set', ({ contacts }) => onContactsSeen(contacts));
+      sock.ev.on('contacts.upsert', onContactsSeen);
+      sock.ev.on('contacts.update', onContactsSeen);
       sock.ev.on('connection.update', (update) => {
         if (update.qr) {
           this.qrReady = true;
@@ -161,7 +163,12 @@ export class WhatsAppConnection extends EventEmitter {
           const jitter = Math.random() * delay * 0.2;
           this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = null;
-            void this.ensureSocket();
+            // Same unhandled-rejection risk as the contacts listeners above — ensureSocket()
+            // can throw before ever creating a socket (e.g. a decrypt failure reading the
+            // persisted creds), which would otherwise never emit a 'close' to retry from.
+            this.ensureSocket().catch((err) => {
+              console.error(`[WhatsApp:${this.sessionId}] Reconnect attempt failed:`, err instanceof Error ? err.message : err);
+            });
           }, delay + jitter);
           return;
         }
