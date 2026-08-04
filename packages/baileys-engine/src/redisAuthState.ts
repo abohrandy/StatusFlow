@@ -1,5 +1,6 @@
 import type { Redis } from 'ioredis';
 import { BufferJSON, initAuthCreds, proto, type AuthenticationCreds, type AuthenticationState, type SignalDataTypeMap } from '@whiskeysockets/baileys';
+import { decryptSessionData, encryptSessionData, isLegacyPlaintext } from './sessionEncryption';
 
 function keyFor(sessionId: string, file: string): string {
   return `baileys:${sessionId}:${file}`;
@@ -13,19 +14,25 @@ function keyFor(sessionId: string, file: string): string {
  * processes/containers that both already depend on the same Redis instance for BullMQ —
  * a session paired via the API must be resumable by the worker later without any shared
  * disk between them.
+ *
+ * Every value is AES-256-GCM encrypted (see sessionEncryption.ts) before it touches Redis —
+ * these are WhatsApp signal-protocol identity/session keys, equivalent to holding the
+ * account's credentials.
  */
 export async function useRedisAuthState(
   sessionId: string,
   redis: Redis,
 ): Promise<{ state: AuthenticationState; saveCreds: () => Promise<void> }> {
   const writeData = async (data: unknown, file: string): Promise<void> => {
-    await redis.set(keyFor(sessionId, file), JSON.stringify(data, BufferJSON.replacer));
+    const json = JSON.stringify(data, BufferJSON.replacer);
+    await redis.set(keyFor(sessionId, file), encryptSessionData(json));
   };
 
   const readData = async <T>(file: string): Promise<T | null> => {
     const raw = await redis.get(keyFor(sessionId, file));
     if (!raw) return null;
-    return JSON.parse(raw, BufferJSON.reviver) as T;
+    const json = isLegacyPlaintext(raw) ? raw : decryptSessionData(raw);
+    return JSON.parse(json, BufferJSON.reviver) as T;
   };
 
   const removeData = async (file: string): Promise<void> => {

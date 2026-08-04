@@ -13,4 +13,4 @@ StatusFlow uses `@whiskeysockets/baileys` to connect to the WhatsApp Web multi-d
 
 ## Connection & Event Logging
 - BaileysManager emits `log` events recording socket state transitions (`UNINITIALIZED` -> `PAIRING` -> `CONNECTED` -> `DISCONNECTED`).
-- AES-256 encrypted multi-device state persisted in PostgreSQL `whatsapp_sessions`.
+- AES-256-GCM encrypted multi-device state persisted in Redis, keyed per session (`packages/baileys-engine/src/redisAuthState.ts` + `sessionEncryption.ts`) — not PostgreSQL; `whatsapp_sessions` only tracks pairing metadata (phone number, status), never the actual credentials.

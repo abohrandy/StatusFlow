@@ -43,12 +43,18 @@ async function getBaileysVersion(): Promise<[number, number, number]> {
  * resolves successfully but reaches nobody, since WhatsApp's server doesn't fan a status
  * out on its own the way it does a group message.
  */
+const MAX_RECONNECT_ATTEMPTS = 10;
+const BASE_RECONNECT_DELAY_MS = 2_000;
+const MAX_RECONNECT_DELAY_MS = 60_000;
+
 export class WhatsAppConnection extends EventEmitter {
   private sock: WASocket | null = null;
   private connectingSocket: Promise<WASocket> | null = null;
   private status: ConnectionStatus = 'connecting';
   private qrReady = false;
   private closingIntentionally = false;
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private sessionId: string, private redis: Redis) {
     super();
@@ -94,7 +100,15 @@ export class WhatsAppConnection extends EventEmitter {
         defaultQueryTimeoutMs: 120_000,
       });
 
-      sock.ev.on('creds.update', saveCreds);
+      // Baileys fires this listener without awaiting it — an unhandled rejection here
+      // (e.g. SESSION_ENCRYPTION_KEY missing or malformed, see sessionEncryption.ts) would
+      // otherwise crash the whole process by default in current Node, taking down every
+      // unrelated feature over one WhatsApp session's misconfiguration.
+      sock.ev.on('creds.update', () => {
+        saveCreds().catch((err) => {
+          console.error(`[WhatsApp:${this.sessionId}] Failed to persist session credentials:`, err instanceof Error ? err.message : err);
+        });
+      });
       // The contact list a status broadcast can actually reach (see contactsStore.ts) —
       // 'messaging-history.set' delivers the initial batch right after connecting,
       // 'contacts.upsert'/'contacts.update' cover anything added or changed after that.
@@ -126,13 +140,36 @@ export class WhatsAppConnection extends EventEmitter {
             this.status = 'close';
             this.emit('status', this.status);
             this.emit('close', { statusCode, loggedOut });
-          } else {
-            void this.ensureSocket();
+            return;
           }
+          this.reconnectAttempts += 1;
+          if (this.reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+            // This used to reconnect instantly and unconditionally forever — a connection
+            // that keeps failing for any non-loggedOut reason (a stuck network path, a
+            // WhatsApp-side issue) would hot-loop indefinitely in the background, invisible
+            // to whoever's awaiting this connection (they've long since timed out on their
+            // own, e.g. waitUntilOpen's 20s). Give up and surface it as terminal instead.
+            this.status = 'close';
+            this.emit('status', this.status);
+            this.emit('close', { statusCode, loggedOut, reconnectAttemptsExhausted: true });
+            return;
+          }
+          // Exponential backoff, capped, with jitter so multiple sessions whose sockets
+          // close around the same moment (e.g. a shared network blip) don't all retry in
+          // lockstep.
+          const delay = Math.min(BASE_RECONNECT_DELAY_MS * 2 ** (this.reconnectAttempts - 1), MAX_RECONNECT_DELAY_MS);
+          const jitter = Math.random() * delay * 0.2;
+          this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            void this.ensureSocket();
+          }, delay + jitter);
           return;
         }
         if (update.connection) {
           this.status = update.connection;
+          if (update.connection === 'open') {
+            this.reconnectAttempts = 0;
+          }
           this.emit('status', this.status);
         }
       });
@@ -261,9 +298,19 @@ export class WhatsAppConnection extends EventEmitter {
     }
   }
 
+  /** Cancels a pending backoff reconnect, if one's scheduled — otherwise it would fire
+   * after an intentional close()/logout(), reopening a socket nobody asked for anymore. */
+  private cancelScheduledReconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
   /** Closes the socket without invalidating the session — safe to call, does not log out. */
   async close(): Promise<void> {
     this.closingIntentionally = true;
+    this.cancelScheduledReconnect();
     this.sock?.end(undefined);
     this.sock = null;
   }
@@ -277,6 +324,7 @@ export class WhatsAppConnection extends EventEmitter {
    */
   async logout(): Promise<void> {
     this.closingIntentionally = true;
+    this.cancelScheduledReconnect();
     try {
       await this.sock?.logout();
     } catch {

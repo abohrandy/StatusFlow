@@ -8,5 +8,5 @@
 5. **EXPIRED / LOGGED_OUT**: Session terminated by user on phone or keys revoked.
 
 ## Security & Storage
-- Session state auth credentials encrypted using AES-256 GCM.
-- Managed by `packages/baileys-engine/src/BaileysManager.ts`.
+- Session state auth credentials encrypted using AES-256-GCM (`packages/baileys-engine/src/sessionEncryption.ts`), persisted in Redis (`redisAuthState.ts`) — not Postgres.
+- Managed by `packages/baileys-engine/src/WhatsAppConnection.ts`.
