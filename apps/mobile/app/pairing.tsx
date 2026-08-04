@@ -114,6 +114,27 @@ export default function PairingScreen() {
     }
   };
 
+  // A stuck PAIRING session (e.g. from an abandoned pairing attempt) still counts against
+  // the plan's connected-account limit even though nothing ever actually connected — and
+  // there's no "Disconnect" button to clear it from this screen's not-yet-connected state.
+  // /whatsapp/disconnect clears every PAIRING/CONNECTED session row for the account
+  // regardless of which one is "latest", so it's safe to call here too.
+  const [resetting, setResetting] = useState(false);
+  const handleResetStuckSession = async () => {
+    setResetting(true);
+    try {
+      await apiClient.post('/whatsapp/disconnect');
+      setSessionId(null);
+      setPairingCode(null);
+      setQrCode(null);
+      Alert.alert('Reset', 'Any stuck connection attempts have been cleared. Try pairing again.');
+    } catch {
+      Alert.alert('Could not reset', 'Please try again.');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   // Re-verifies the existing session's WhatsApp socket rather than re-pairing from
   // scratch — /pairing/confirm rebuilds the connection from the session's persisted
   // Redis auth state, so this recovers a connection that dropped without invalidating
@@ -263,6 +284,16 @@ export default function PairingScreen() {
                 </View>
               </Card>
             )}
+
+            <Pressable onPress={handleResetStuckSession} disabled={resetting} style={styles.resetLinkRow}>
+              {resetting ? (
+                <ActivityIndicator color={Colors.error} size="small" />
+              ) : (
+                <Text style={styles.resetLink}>
+                  Getting a "connected account limit" error even though nothing's connected? Reset a stuck connection.
+                </Text>
+              )}
+            </Pressable>
           </>
         )}
       </ScrollView>
@@ -421,4 +452,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
   },
   qrImage: { width: 160, height: 160 },
+  resetLinkRow: { alignItems: 'center', marginTop: Spacing.sm },
+  resetLink: {
+    ...Typography.bodySm,
+    color: Colors.error,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
+  },
 });

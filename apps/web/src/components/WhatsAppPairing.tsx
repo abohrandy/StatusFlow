@@ -53,6 +53,27 @@ export const WhatsAppPairing: React.FC = () => {
     try { await apiClient.disconnectWhatsApp(); } finally { setIsConnected(false); setSessionId(null); }
   };
 
+  // A stuck PAIRING session (e.g. an abandoned pairing attempt) still counts against the
+  // plan's connected-account limit even though nothing ever actually connected, and there's
+  // no Disconnect button in this not-yet-connected state to clear it. disconnectWhatsApp()
+  // clears every PAIRING/CONNECTED row for the account, not just "the latest one", so it's
+  // safe to call here too.
+  const [resetting, setResetting] = useState(false);
+  const handleResetStuckSession = async () => {
+    setResetting(true);
+    try {
+      await apiClient.disconnectWhatsApp();
+      setSessionId(null);
+      setPairingCode(null);
+      setQrCode(null);
+      setError(null);
+    } catch {
+      setError('Could not reset the stuck connection. Please try again.');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-8">
       <div className="text-center space-y-2">
@@ -86,6 +107,18 @@ export const WhatsAppPairing: React.FC = () => {
             <button type="button" onClick={handleGenerateCode} disabled={loading} className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 underline underline-offset-2">{loading ? 'Requesting Code...' : 'Get a new code'}</button>
           </div> : !qrCode ? <form onSubmit={handleGenerateCode} className="space-y-4"><button type="submit" disabled={loading} className="w-full py-3 bg-emerald-500 font-semibold text-zinc-950 text-sm rounded-xl">{loading ? 'Generating QR Code...' : 'Generate Real WhatsApp QR Code'}</button></form> : <div className="text-center space-y-4 py-4"><div className="text-xs text-zinc-400">Open WhatsApp → Linked Devices → Link a device, then scan this QR code.</div><img src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(qrCode)}`} alt="WhatsApp pairing QR code" className="w-60 h-60 mx-auto bg-white p-2 rounded-xl" /><div className="text-xs text-amber-400">Waiting for WhatsApp to confirm the pairing...</div><button type="button" onClick={handleGenerateCode} disabled={loading} className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 underline underline-offset-2">{loading ? 'Generating QR Code...' : 'Get a new QR code'}</button></div>}
         </div>}
+        {!isConnected && (
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={handleResetStuckSession}
+              disabled={resetting}
+              className="text-xs font-medium text-red-400 hover:text-red-300 underline underline-offset-2 disabled:opacity-50"
+            >
+              {resetting ? 'Resetting...' : 'Getting a "connected account limit" error even though nothing\'s connected? Reset a stuck connection.'}
+            </button>
+          </div>
+        )}
         <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2"><div className="text-xs font-semibold text-zinc-400">Live Socket Event Logs</div>{sessionId && <div className="font-mono text-[11px] text-zinc-500">INFO: Baileys WebSocket instance ready.</div>}{isConnected && <div className="font-mono text-[11px] text-emerald-400">SUCCESS: Socket connected (state: CONNECTED)</div>}{!sessionId && !isConnected && <div className="font-mono text-[11px] text-zinc-600">No socket activity yet.</div>}</div>
       </div>
     </div>
