@@ -131,11 +131,20 @@ export const MediaLibrary: React.FC = () => {
             <div key={item.id} className="group relative rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden hover:border-zinc-700 transition-all flex flex-col justify-between">
               {/* Media Thumbnail */}
               <div className="relative h-44 bg-zinc-950 overflow-hidden cursor-pointer" onClick={() => setSelectedItem(item)}>
-                <img
-                  src={item.fileUrl}
-                  alt={item.fileName}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
+                {item.mimeType.startsWith('video') ? (
+                  <video
+                    src={item.fileUrl}
+                    muted
+                    preload="metadata"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                ) : (
+                  <img
+                    src={item.fileUrl}
+                    alt={item.fileName}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                )}
                 <span className="absolute top-3 left-3 px-2 py-0.5 rounded-full bg-zinc-950/80 backdrop-blur-md text-zinc-300 text-[10px] font-mono border border-zinc-800">
                   {item.mimeType.startsWith('video') ? 'VIDEO' : 'IMAGE'}
                 </span>
@@ -173,7 +182,11 @@ export const MediaLibrary: React.FC = () => {
             </div>
 
             <div className="h-64 rounded-xl bg-zinc-950 overflow-hidden flex items-center justify-center border border-zinc-800">
-              <img src={selectedItem.fileUrl} alt={selectedItem.fileName} className="max-h-full object-contain" />
+              {selectedItem.mimeType.startsWith('video') ? (
+                <video src={selectedItem.fileUrl} controls className="max-h-full object-contain" />
+              ) : (
+                <img src={selectedItem.fileUrl} alt={selectedItem.fileName} className="max-h-full object-contain" />
+              )}
             </div>
 
             <div className="flex justify-between items-center text-xs text-zinc-400">

@@ -27,6 +27,9 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
     apiClient.listMedia().then(({ media }) => setMediaLibrary(media ?? [])).catch(() => setMediaLibrary([]));
   }, []);
 
+  const selectedMedia = mediaLibrary.find(m => m.fileUrl === selectedMediaUrl);
+  const selectedIsVideo = selectedMedia?.mimeType.startsWith('video') ?? false;
+
   const handleUploadInModal = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -139,7 +142,11 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
               <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Status Media Asset</label>
               <div className="flex items-center gap-4 p-4 rounded-xl bg-zinc-950 border border-zinc-800">
                 {selectedMediaUrl ? (
-                  <img src={selectedMediaUrl} alt="Selected Media" className="w-16 h-16 object-cover rounded-lg border border-zinc-800" />
+                  selectedIsVideo ? (
+                    <video src={selectedMediaUrl} muted preload="metadata" className="w-16 h-16 object-cover rounded-lg border border-zinc-800" />
+                  ) : (
+                    <img src={selectedMediaUrl} alt="Selected Media" className="w-16 h-16 object-cover rounded-lg border border-zinc-800" />
+                  )
                 ) : (
                   <div className="w-16 h-16 rounded-lg border border-dashed border-zinc-700 flex items-center justify-center text-zinc-500 text-xs">None</div>
                 )}
@@ -248,11 +255,22 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
             >
               {/* Media Background for IMAGE / VIDEO */}
               {statusType !== 'TEXT' && selectedMediaUrl && (
-                <img
-                  src={selectedMediaUrl}
-                  alt="Status Preview"
-                  className="absolute inset-0 w-full h-full object-cover opacity-90"
-                />
+                selectedIsVideo ? (
+                  <video
+                    src={selectedMediaUrl}
+                    muted
+                    loop
+                    autoPlay
+                    playsInline
+                    className="absolute inset-0 w-full h-full object-cover opacity-90"
+                  />
+                ) : (
+                  <img
+                    src={selectedMediaUrl}
+                    alt="Status Preview"
+                    className="absolute inset-0 w-full h-full object-cover opacity-90"
+                  />
+                )
               )}
 
               {/* Status Header Progress Bar */}
@@ -300,14 +318,26 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
             ) : (
               <div className="grid grid-cols-3 gap-3 max-h-64 overflow-y-auto p-1">
                 {mediaLibrary.map((item) => (
-                  <img
-                    key={item.id}
-                    src={item.fileUrl}
-                    alt={item.fileName}
-                    title={item.fileName}
-                    onClick={() => { setSelectedMediaUrl(item.fileUrl); setShowMediaModal(false); }}
-                    className="w-full h-24 object-cover rounded-xl border border-zinc-800 hover:border-emerald-500 cursor-pointer transition-all"
-                  />
+                  item.mimeType.startsWith('video') ? (
+                    <video
+                      key={item.id}
+                      src={item.fileUrl}
+                      title={item.fileName}
+                      muted
+                      preload="metadata"
+                      onClick={() => { setSelectedMediaUrl(item.fileUrl); setShowMediaModal(false); }}
+                      className="w-full h-24 object-cover rounded-xl border border-zinc-800 hover:border-emerald-500 cursor-pointer transition-all"
+                    />
+                  ) : (
+                    <img
+                      key={item.id}
+                      src={item.fileUrl}
+                      alt={item.fileName}
+                      title={item.fileName}
+                      onClick={() => { setSelectedMediaUrl(item.fileUrl); setShowMediaModal(false); }}
+                      className="w-full h-24 object-cover rounded-xl border border-zinc-800 hover:border-emerald-500 cursor-pointer transition-all"
+                    />
+                  )
                 ))}
               </div>
             )}
