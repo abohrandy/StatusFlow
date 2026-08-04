@@ -273,7 +273,7 @@ export class ApiClient {
   // --- WhatsApp ---------------------------------------------------------------
 
   whatsappStatus() {
-    return this.request<{ connected: boolean; status: string; phoneNumber: string | null }>('/whatsapp/status');
+    return this.request<{ connected: boolean; status: string; phoneNumber: string | null; lastActive: string | null; sessionId: string | null }>('/whatsapp/status');
   }
 
   /** Throws `ApiError` (status 403) with a Free-trial-abuse or account-limit message if blocked. */

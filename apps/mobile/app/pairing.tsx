@@ -9,11 +9,17 @@ import { apiClient } from '../lib/apiClient';
 
 type PairingMethod = 'code' | 'qr';
 
-const CONNECTION_LOGS = [
-  { event: 'Session Handshake', icon: 'devices' as const, time: 'Today, 10:42 AM' },
-  { event: 'Media Catalog Sync', icon: 'sync' as const, time: 'Today, 09:15 AM' },
-  { event: 'Key Rotation', icon: 'lock' as const, time: 'Yesterday, 11:59 PM' },
-];
+function formatLastActive(iso: string | null): string {
+  if (!iso) return 'Unknown';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.round(diffMs / 60_000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
 
 export default function PairingScreen() {
   const router = useRouter();
@@ -23,7 +29,9 @@ export default function PairingScreen() {
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [lastActive, setLastActive] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   useEffect(() => {
     apiClient
@@ -31,6 +39,8 @@ export default function PairingScreen() {
       .then(({ data }) => {
         setIsConnected(data.connected);
         if (data.phoneNumber) setPhoneNumber(data.phoneNumber);
+        if (data.sessionId) setSessionId(data.sessionId);
+        setLastActive(data.lastActive);
       })
       .catch(() => {
         // No session yet, or a transient error — either way, default to "not connected".
@@ -51,6 +61,7 @@ export default function PairingScreen() {
             setIsConnected(true);
             setPairingCode(null);
             setQrCode(null);
+            setLastActive(data.lastActive);
             return;
           }
           apiClient.post('/whatsapp/pairing/confirm', { sessionId }).then(() => {
@@ -103,6 +114,24 @@ export default function PairingScreen() {
     }
   };
 
+  // Re-verifies the existing session's WhatsApp socket rather than re-pairing from
+  // scratch — /pairing/confirm rebuilds the connection from the session's persisted
+  // Redis auth state, so this recovers a connection that dropped without invalidating
+  // the pairing (e.g. a transient network blip) instead of forcing the user to link
+  // their phone again.
+  const handleReconnect = async () => {
+    if (!sessionId) return;
+    setReconnecting(true);
+    try {
+      await apiClient.post('/whatsapp/pairing/confirm', { sessionId });
+      Alert.alert('Reconnected', 'Your WhatsApp connection is active.');
+    } catch {
+      Alert.alert('Reconnect failed', 'Could not verify the WhatsApp connection. Try disconnecting and pairing again.');
+    } finally {
+      setReconnecting(false);
+    }
+  };
+
   return (
     <View style={styles.screen}>
       <TopAppBar
@@ -124,8 +153,12 @@ export default function PairingScreen() {
                 Your WhatsApp account is actively synchronized with StatusFlow using an encrypted multi-device session.
               </Text>
               <View style={styles.heroActions}>
-                <Pressable style={styles.reconnectButton}>
-                  <MaterialIcons name="sync" size={16} color={Colors.onPrimary} />
+                <Pressable style={styles.reconnectButton} onPress={handleReconnect} disabled={reconnecting}>
+                  {reconnecting ? (
+                    <ActivityIndicator color={Colors.onPrimary} size="small" />
+                  ) : (
+                    <MaterialIcons name="sync" size={16} color={Colors.onPrimary} />
+                  )}
                   <Text style={styles.reconnectLabel}>Reconnect</Text>
                 </Pressable>
                 <Pressable style={styles.disconnectButton} onPress={handleDisconnect}>
@@ -135,29 +168,10 @@ export default function PairingScreen() {
               </View>
             </Card>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Connection Logs</Text>
-              <View style={styles.logList}>
-                {CONNECTION_LOGS.map((log) => (
-                  <Card key={log.event} style={styles.logRow} padding="sm">
-                    <MaterialIcons name={log.icon} size={20} color={Colors.primary} />
-                    <View style={styles.logText}>
-                      <Text style={styles.logEvent}>{log.event}</Text>
-                      <Text style={styles.logTime}>{log.time}</Text>
-                    </View>
-                    <View style={styles.successPill}>
-                      <Text style={styles.successPillLabel}>Success</Text>
-                    </View>
-                  </Card>
-                ))}
-              </View>
-            </View>
-
             <Card style={styles.section}>
               <Text style={styles.sectionTitle}>Device Details</Text>
-              <DetailRow label="Phone Number" value="+234 812 345 6789" />
-              <DetailRow label="Linked Device" value="Pixel 8" />
-              <DetailRow label="Last Active" value="2 mins ago" last />
+              <DetailRow label="Phone Number" value={phoneNumber || 'Unknown'} />
+              <DetailRow label="Last Active" value={formatLastActive(lastActive)} last />
             </Card>
 
             <View style={[styles.section, styles.securityCard]}>
@@ -317,27 +331,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...Typography.headlineSm,
     color: Colors.onSurface,
-  },
-  logList: { gap: Spacing.sm },
-  logRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  logText: { flex: 1 },
-  logEvent: {
-    ...Typography.labelMd,
-    color: Colors.onSurface,
-  },
-  logTime: {
-    ...Typography.bodySm,
-    color: Colors.onSurfaceVariant,
-  },
-  successPill: {
-    backgroundColor: `${Colors.tertiary}1A`,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-  },
-  successPillLabel: {
-    ...Typography.labelSm,
-    color: Colors.tertiary,
   },
   detailRow: {
     flexDirection: 'row',

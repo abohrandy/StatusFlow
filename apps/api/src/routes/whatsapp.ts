@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { assertCanConnectWhatsAppAccount, SubscriptionError, type PlanSlug } from '@statusflow/subscriptions';
-import { WhatsAppConnection } from '@statusflow/baileys-engine';
+import { WhatsAppConnection, type ConnectionStatus } from '@statusflow/baileys-engine';
 import { requireAuth } from '../middleware/auth';
 import { rateLimiter } from '../middleware/rateLimiter';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -60,6 +60,18 @@ whatsappRouter.post('/pairing/request', rateLimiter(10, 15 * 60 * 1000, (req) =>
   const session = await createPairingSession(req.user!.id, method === 'PAIRING_CODE' ? normalizedPhoneNumber : '');
   const connection = new WhatsAppConnection(session.id, redisConnection);
   activeConnections.set(session.id, connection);
+  // Marking CONNECTED as soon as the socket opens — rather than waiting solely on the
+  // client's /pairing/confirm poll to catch it — closes the gap where a deploy restarts
+  // this process between the phone finishing pairing and the next poll arriving: the DB
+  // already reflects CONNECTED, so /whatsapp/status is correct even though the in-memory
+  // activeConnections entry that would otherwise answer /pairing/confirm is gone.
+  connection.on('status', (status: ConnectionStatus) => {
+    if (status === 'open') {
+      markSessionConnected(session.id, req.user!.id).catch((err) => {
+        console.error('[WhatsApp] Failed to persist CONNECTED status:', describeError(err));
+      });
+    }
+  });
   if (method === 'QR_CODE') {
     try {
       const qrCode = await connection.requestQrCode();
@@ -101,8 +113,17 @@ whatsappRouter.post('/pairing/confirm', rateLimiter(300, 15 * 60 * 1000, (req) =
     return res.status(400).json({ error: 'sessionId is required.' });
   }
 
-  const connection = activeConnections.get(sessionId);
-  if (!connection || !(await connection.waitUntilOpen(2_000))) {
+  // The connection that requested this session's code may be gone — most commonly
+  // because this API process redeployed while the user was mid-pairing. Baileys creds
+  // are persisted to Redis independently of that in-memory bookkeeping, so rebuilding a
+  // connection here still recovers cleanly: if the phone already completed pairing, the
+  // now-registered creds let this reconnect straight to 'open' with no new code needed.
+  let connection = activeConnections.get(sessionId);
+  if (!connection) {
+    connection = new WhatsAppConnection(sessionId, redisConnection);
+    activeConnections.set(sessionId, connection);
+  }
+  if (!(await connection.waitUntilOpen(2_000))) {
     return res.status(409).json({ error: 'WhatsApp pairing has not been completed yet.' });
   }
 
@@ -125,5 +146,7 @@ whatsappRouter.get('/status', asyncHandler(async (req, res) => {
     connected: session?.status === 'CONNECTED',
     status: session?.status ?? 'UNINITIALIZED',
     phoneNumber: session?.phone_number ?? null,
+    lastActive: session?.last_active ?? null,
+    sessionId: session?.id ?? null,
   });
 }));

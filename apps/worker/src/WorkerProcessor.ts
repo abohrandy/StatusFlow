@@ -21,6 +21,21 @@ export interface PublishJobData {
  * are exhausted are all real regardless of whether the send itself succeeds.
  */
 export class WorkerProcessor {
+  // The worker runs up to 5 jobs concurrently (see queue.ts). Two due posts on the same
+  // WhatsApp session would otherwise open two simultaneous Baileys sockets authenticated
+  // with the same registered device credentials — WhatsApp treats the newer connection as
+  // a replacement and drops the older one mid-send. Serializing per session_id keeps
+  // different users' sessions running in parallel while one session's posts still go out
+  // one at a time.
+  private sessionLocks = new Map<string, Promise<void>>();
+
+  private runSerialized<T>(sessionId: string, task: () => Promise<T>): Promise<T> {
+    const previous = this.sessionLocks.get(sessionId) ?? Promise.resolve();
+    const run = previous.then(task, task);
+    this.sessionLocks.set(sessionId, run.then(() => undefined, () => undefined));
+    return run;
+  }
+
   public async processJob(job: Job<PublishJobData>): Promise<void> {
     const attemptNumber = job.attemptsMade + 1;
     const maxAttempts = job.opts.attempts ?? 1;
@@ -43,25 +58,27 @@ export class WorkerProcessor {
       return;
     }
 
-    const connection = new WhatsAppConnection(post.session_id!, redisConnection);
-    try {
-      await connection.sendStatus({
-        mediaType: post.media_type,
-        caption: post.caption,
-        mediaUrl: post.media_url,
-      });
-      await markStatusPostCompleted(post.id);
-      await recordQueueLog(post.id, attemptNumber, 'Published successfully.');
-    } catch (err: any) {
-      const message = err?.message ?? 'Unknown publish error.';
-      await recordQueueLog(post.id, attemptNumber, `Attempt failed: ${message}`);
-      if (attemptNumber >= maxAttempts) {
-        await markStatusPostFailed(post.id, message);
-      } else {
-        throw err; // let BullMQ retry with its configured backoff
+    await this.runSerialized(post.session_id!, async () => {
+      const connection = new WhatsAppConnection(post.session_id!, redisConnection);
+      try {
+        await connection.sendStatus({
+          mediaType: post.media_type,
+          caption: post.caption,
+          mediaUrl: post.media_url,
+        });
+        await markStatusPostCompleted(post.id);
+        await recordQueueLog(post.id, attemptNumber, 'Published successfully.');
+      } catch (err: any) {
+        const message = err?.message ?? 'Unknown publish error.';
+        await recordQueueLog(post.id, attemptNumber, `Attempt failed: ${message}`);
+        if (attemptNumber >= maxAttempts) {
+          await markStatusPostFailed(post.id, message);
+        } else {
+          throw err; // let BullMQ retry with its configured backoff
+        }
+      } finally {
+        await connection.close();
       }
-    } finally {
-      await connection.close();
-    }
+    });
   }
 }
