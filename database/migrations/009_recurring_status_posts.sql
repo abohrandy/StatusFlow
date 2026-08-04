@@ -10,6 +10,8 @@
 -- Recurrence math (see apps/worker/src/recurrence.ts) works entirely in the UTC instants
 -- stored here — start_at's own UTC hour/minute doubles as the time-of-day for every future
 -- occurrence, so no separate timezone-aware "time of day" column is needed.
+BEGIN;
+
 CREATE TYPE recurrence_type AS ENUM ('INTERVAL', 'WEEKDAYS');
 CREATE TYPE series_status AS ENUM ('ACTIVE', 'CANCELLED', 'COMPLETED');
 
@@ -43,3 +45,5 @@ CREATE INDEX idx_schedules_active ON schedules(status) WHERE status = 'ACTIVE';
 
 ALTER TABLE status_posts ADD COLUMN series_id UUID REFERENCES schedules(id) ON DELETE CASCADE;
 CREATE INDEX idx_status_posts_series ON status_posts(series_id) WHERE series_id IS NOT NULL;
+
+COMMIT;
