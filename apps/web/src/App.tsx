@@ -272,7 +272,7 @@ function DashboardShell() {
             can't take down the sidebar with it; every other nav link keeps working. */}
         <div className="p-4 sm:p-6 md:p-8 max-w-6xl w-full mx-auto space-y-6">
           <ErrorBoundary key={activeTab} fallback={<TabErrorFallback />}>
-            {activeTab === 'dashboard' && <DashboardOverview />}
+            {activeTab === 'dashboard' && <DashboardOverview onNavigateToComposer={() => setActiveTab('composer')} />}
             {activeTab === 'composer' && <StatusComposer onNavigateToBilling={() => setActiveTab('billing')} />}
             {activeTab === 'calendar' && <HistoryAndCalendar />}
             {activeTab === 'notifications' && <NotificationCenter />}

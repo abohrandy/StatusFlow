@@ -17,7 +17,11 @@ function formatMediaAge(iso: string): string {
 
 const STORAGE_LIMIT_MB = 5 * 1024; // 5 GB, matches the plan copy this card has always shown.
 
-export const DashboardOverview: React.FC = () => {
+interface DashboardOverviewProps {
+  onNavigateToComposer?: () => void;
+}
+
+export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigateToComposer }) => {
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
@@ -69,7 +73,10 @@ export const DashboardOverview: React.FC = () => {
           <p className="text-sm text-zinc-400 mt-1">Manage your single connected WhatsApp account and scheduled status broadcasts.</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-semibold text-sm transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2">
+          <button
+            onClick={onNavigateToComposer}
+            className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-semibold text-sm transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+          >
             <span>+</span> Schedule New Status
           </button>
         </div>
