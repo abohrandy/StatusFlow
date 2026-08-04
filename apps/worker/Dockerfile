@@ -5,8 +5,10 @@
 # Pinned by digest, not just the "22-alpine" tag — see apps/api/Dockerfile.
 FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS base
 WORKDIR /app
-# @whiskeysockets/baileys pulls in libsignal from a git+https:// URL — see apps/api/Dockerfile.
-RUN apk add --no-cache git
+# @whiskeysockets/baileys's git-fetched dependencies (libsignal, eslint-config) need a real
+# git binary and, for eslint-config's SSH-style URL, a rewrite to plain HTTPS — see apps/api/Dockerfile.
+RUN apk add --no-cache git \
+    && git config --global url."https://github.com/".insteadOf "git@github.com:"
 # Pinned to match package.json's "packageManager" — see apps/api/Dockerfile for why an
 # unpinned `npm install -g pnpm` breaks `pnpm install --frozen-lockfile` below.
 RUN npm install -g pnpm@10.33.0
