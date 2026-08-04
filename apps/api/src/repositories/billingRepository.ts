@@ -89,10 +89,12 @@ export async function getUserCreatedAt(userId: string): Promise<Date | null> {
 }
 
 export async function getActiveSubscription(userId: string): Promise<SubscriptionRow | null> {
-  // Super Admin override: ADMIN users (a real, DB-driven role — see database/seeds) bypass
-  // all account/post limits by inheriting monthly-business features.
+  // Super Admin override: SUPER_ADMIN bypasses all account/post limits by inheriting
+  // monthly-business features. Deliberately NOT plain ADMIN — a delegated department admin
+  // (see admin_scopes) shouldn't get free premium billing just for having Admin Panel
+  // access; that would undermine the whole point of scoping their access.
   const userCheck = await pool.query<{ role: string }>('SELECT role FROM users WHERE id = $1', [userId]);
-  if (userCheck.rows[0]?.role === 'ADMIN') {
+  if (userCheck.rows[0]?.role === 'SUPER_ADMIN') {
     return {
       id: 'admin-override',
       user_id: userId,
