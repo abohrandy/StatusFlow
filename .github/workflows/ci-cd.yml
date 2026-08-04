@@ -14,7 +14,16 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js & pnpm
+      - name: Setup Node.js
+        # Explicit Node 22 to match both Dockerfiles — @supabase/supabase-js needs the
+        # native WebSocket global only Node 22+ provides. Without this the job runs on
+        # whatever Node version the runner defaults to, which can pass here and still break
+        # in the actual container.
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
         # No `version:` here on purpose — pnpm/action-setup reads it from the
         # `packageManager` field in package.json, which is the single source of truth for
         # the version that actually generated pnpm-lock.yaml. Pinning a different version
@@ -61,11 +70,24 @@ jobs:
       - name: Build Web Production Bundle
         run: pnpm --filter @statusflow/web build
 
-  deploy-production:
+  docker-build-verify:
     needs: build-and-test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Deploy API & Worker Containers to AWS ECS / Render
-        run: echo "Deploying Docker container images to production registry..."
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Actual production deployment is handled entirely by Railway's own GitHub
+      # integration — it rebuilds and redeploys apps/api's and apps/worker's services
+      # straight from these Dockerfiles on every push to main, independent of this workflow.
+      # This job's only purpose is to catch a Dockerfile-level break (e.g. the unpinned-pnpm-
+      # version bug that silently failed every Railway deploy for hours before anyone
+      # noticed) in CI before it ever reaches Railway — build-and-test above never actually
+      # builds either Dockerfile, so nothing else in this pipeline would have caught it.
+      - name: Build API Docker Image
+        run: docker build -f apps/api/Dockerfile -t statusflow-api:ci .
+
+      - name: Build Worker Docker Image
+        run: docker build -f apps/worker/Dockerfile -t statusflow-worker:ci .

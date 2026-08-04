@@ -12,8 +12,7 @@
     "ioredis": "^5.4.1",
     "@statusflow/baileys-engine": "workspace:*",
     "@statusflow/subscriptions": "workspace:*",
-    "@statusflow/types": "workspace:*",
-    "@statusflow/utils": "workspace:*"
+    "@statusflow/types": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
