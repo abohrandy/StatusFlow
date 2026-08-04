@@ -64,8 +64,10 @@ export {
   canConnectWhatsAppAccount,
   canPostMediaType,
   canUseFeature,
+  canCreateRecurringSeries,
   assertCanScheduleStatus,
   assertCanConnectWhatsAppAccount,
   assertCanUseMediaType,
   assertCanUseFeature,
+  assertCanCreateRecurringSeries,
 } from './featureGate';

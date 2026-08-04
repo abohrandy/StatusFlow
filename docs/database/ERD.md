@@ -20,4 +20,5 @@ erDiagram
     media_files ||--o| status_posts : "attaches to"
     status_posts ||--o{ posting_history : "records"
     status_posts ||--o{ queue_logs : "logs execution"
+    schedules ||--o{ status_posts : "materializes occurrences into"
 ```

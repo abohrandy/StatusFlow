@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import {
+  assertCanCreateRecurringSeries,
   assertCanScheduleStatus,
   assertCanUseFeature,
   hasFeature,
@@ -66,6 +67,17 @@ export async function requireScheduleQuota(req: Request, res: Response, next: Ne
       getUserCreatedAt(req.user!.id),
     ]);
     assertCanScheduleStatus(planSlug, { lastScheduledStatusAt: result.rows[0]?.last ?? null, accountCreatedAt });
+    next();
+  } catch (err) {
+    handleSubscriptionError(res, err);
+  }
+}
+
+/** Gates creating a recurring status post series behind a plan without the Free tier's interval quota. */
+export async function requireRecurringSeriesAllowed(req: Request, res: Response, next: NextFunction) {
+  try {
+    const planSlug = await loadPlanSlug(req.user!.id);
+    assertCanCreateRecurringSeries(planSlug);
     next();
   } catch (err) {
     handleSubscriptionError(res, err);

@@ -155,6 +155,26 @@ export function canUseFeature(planSlug: PlanSlug, feature: FeatureKey): FeatureG
   };
 }
 
+/**
+ * Recurring status post series only make sense for a plan without the Free tier's 7-day
+ * interval quota — a recurring series posts more often than that quota permits by
+ * definition, so this reuses the same `hasUnlimitedScheduling` check `canScheduleStatus`
+ * already relies on for the same reason.
+ */
+export function canCreateRecurringSeries(planSlug: PlanSlug): FeatureGateResult {
+  if (hasUnlimitedScheduling(planSlug)) return allow();
+
+  const upgradeTarget = findUpgradeFor(planSlug, (plan) => hasUnlimitedScheduling(plan.slug as PlanSlug));
+  return {
+    allowed: false,
+    code: 'FEATURE_NOT_AVAILABLE',
+    reason: 'Recurring status posts need a plan without a scheduling interval limit.',
+    upgrade: upgradeTarget
+      ? buildUpgradeSuggestion(upgradeTarget.slug as PlanSlug, upgradeTarget.name, 'schedule recurring status posts')
+      : undefined,
+  };
+}
+
 function assert(result: FeatureGateResult): void {
   if (result.allowed) return;
   throw new SubscriptionError(result.code as SubscriptionErrorCode, result.reason as string, {
@@ -177,4 +197,8 @@ export function assertCanUseMediaType(planSlug: PlanSlug, mediaType: MediaType):
 
 export function assertCanUseFeature(planSlug: PlanSlug, feature: FeatureKey): void {
   assert(canUseFeature(planSlug, feature));
+}
+
+export function assertCanCreateRecurringSeries(planSlug: PlanSlug): void {
+  assert(canCreateRecurringSeries(planSlug));
 }

@@ -32,7 +32,7 @@ const SELECT_WITH_MEDIA = `
  * (normally from that real upload) against status_posts.media_file_id, so the schema's
  * foreign key keeps pointing at a real media_files row.
  */
-async function createMediaFile(userId: string, mediaType: MediaType, mediaUrl: string): Promise<string> {
+export async function createMediaFile(userId: string, mediaType: MediaType, mediaUrl: string): Promise<string> {
   const result = await pool.query<{ id: string }>(
     `INSERT INTO media_files (user_id, file_name, file_url, file_size, mime_type)
      VALUES ($1, $2, $3, 0, $4)

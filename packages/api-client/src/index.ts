@@ -33,6 +33,36 @@ export interface CreateStatusPostInput {
   mediaUrl?: string;
 }
 
+export type RecurrenceType = 'INTERVAL' | 'WEEKDAYS';
+
+export interface RecurringSeries {
+  id: string;
+  mediaType: StatusPost['mediaType'];
+  caption: string | null;
+  mediaUrl: string | null;
+  recurrenceType: RecurrenceType;
+  /** Only set when recurrenceType === 'INTERVAL'. */
+  intervalDays: number | null;
+  /** Only set when recurrenceType === 'WEEKDAYS'. 0=Sunday .. 6=Saturday. */
+  weekdays: number[] | null;
+  startAt: string;
+  endAt: string;
+  lastMaterializedAt: string | null;
+  status: 'ACTIVE' | 'CANCELLED' | 'COMPLETED';
+  createdAt: string;
+}
+
+export interface CreateRecurringSeriesInput {
+  mediaType: StatusPost['mediaType'];
+  caption?: string;
+  mediaUrl?: string;
+  recurrenceType: RecurrenceType;
+  intervalDays?: number;
+  weekdays?: number[];
+  startAt: string;
+  endAt: string;
+}
+
 export interface MediaFile {
   id: string;
   fileName: string;
@@ -162,6 +192,20 @@ export class ApiClient {
   /** Real per-attempt worker execution logs for a post — not a synthesized/placeholder message. */
   getPostLogs(id: string) {
     return this.request<{ logs: QueueLog[] }>(`/posts/${encodeURIComponent(id)}/logs`);
+  }
+
+  /** Throws `ApiError` (403) if the plan doesn't support recurring series (see @statusflow/subscriptions#canCreateRecurringSeries). */
+  createRecurringSeries(payload: CreateRecurringSeriesInput) {
+    return this.request<{ series: RecurringSeries }>('/posts/recurring', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  listRecurringSeries() {
+    return this.request<{ series: RecurringSeries[] }>('/posts/recurring');
+  }
+
+  /** Stops future occurrences and cancels any already-materialized ones that haven't sent yet. */
+  cancelRecurringSeries(id: string) {
+    return this.request<{ series: RecurringSeries }>(`/posts/recurring/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
   }
 
   // --- Media ---------------------------------------------------------------
