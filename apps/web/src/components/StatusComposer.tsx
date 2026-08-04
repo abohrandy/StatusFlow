@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { ApiError, type MediaFile } from '@statusflow/api-client';
+import { ApiError, type MediaFile, type RecurrenceType, type RecurringSeries } from '@statusflow/api-client';
 import { apiClient } from '../lib/apiClient';
 import { FreeQuotaModal } from './modals/FreeQuotaModal';
 
 const EMOJIS = ['🔥', '🎉', '🚀', '😍', '✨', '💯', '🛒', '📅', '💬', '⭐'];
 const TEXT_BG_COLORS = ['#007a5a', '#128C7E', '#5c1b9b', '#9b1b30', '#1b439b', '#333333'];
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const INTERVAL_PRESETS = [
+  { label: 'Daily', days: 1 },
+  { label: 'Every 3 days', days: 3 },
+  { label: 'Weekly', days: 7 },
+  { label: 'Every 2 weeks', days: 14 },
+];
 
 interface StatusComposerProps {
   onNavigateToBilling?: () => void;
@@ -23,8 +30,21 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
   const [mediaLibrary, setMediaLibrary] = useState<MediaFile[]>([]);
   const [uploadingMedia, setUploadingMedia] = useState(false);
 
+  const [postMode, setPostMode] = useState<'ONCE' | 'RECURRING'>('ONCE');
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('INTERVAL');
+  const [intervalDays, setIntervalDays] = useState(1);
+  const [weekdays, setWeekdays] = useState<number[]>([]);
+  const [recurStartAt, setRecurStartAt] = useState('');
+  const [recurEndAt, setRecurEndAt] = useState('');
+  const [activeSeries, setActiveSeries] = useState<RecurringSeries[]>([]);
+
+  const refreshSeries = () => {
+    apiClient.listRecurringSeries().then(({ series }) => setActiveSeries(series.filter(s => s.status === 'ACTIVE'))).catch(() => {});
+  };
+
   useEffect(() => {
     apiClient.listMedia().then(({ media }) => setMediaLibrary(media ?? [])).catch(() => setMediaLibrary([]));
+    refreshSeries();
   }, []);
 
   const selectedMedia = mediaLibrary.find(m => m.fileUrl === selectedMediaUrl);
@@ -66,17 +86,41 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
       setTimeout(() => setSaveStatusMessage(null), 3000);
       return;
     }
+    if (postMode === 'RECURRING' && recurrenceType === 'WEEKDAYS' && weekdays.length === 0) {
+      setSaveStatusMessage('Pick at least one weekday for the series to repeat on.');
+      setTimeout(() => setSaveStatusMessage(null), 3000);
+      return;
+    }
+
     setCheckingQuota(true);
     try {
-      await apiClient.createStatusPost({
-        mediaType: statusType,
-        caption: caption || undefined,
-        mediaUrl: statusType !== 'TEXT' ? selectedMediaUrl ?? undefined : undefined,
-        scheduledAt: new Date(scheduledTime).toISOString(),
-      });
+      if (postMode === 'ONCE') {
+        await apiClient.createStatusPost({
+          mediaType: statusType,
+          caption: caption || undefined,
+          mediaUrl: statusType !== 'TEXT' ? selectedMediaUrl ?? undefined : undefined,
+          scheduledAt: new Date(scheduledTime).toISOString(),
+        });
+        setScheduledTime('');
+        setSaveStatusMessage('Status scheduled successfully and added to queue!');
+      } else {
+        await apiClient.createRecurringSeries({
+          mediaType: statusType,
+          caption: caption || undefined,
+          mediaUrl: statusType !== 'TEXT' ? selectedMediaUrl ?? undefined : undefined,
+          recurrenceType,
+          intervalDays: recurrenceType === 'INTERVAL' ? intervalDays : undefined,
+          weekdays: recurrenceType === 'WEEKDAYS' ? weekdays : undefined,
+          startAt: new Date(recurStartAt).toISOString(),
+          endAt: new Date(recurEndAt).toISOString(),
+        });
+        setRecurStartAt('');
+        setRecurEndAt('');
+        setWeekdays([]);
+        setSaveStatusMessage('Recurring series created — upcoming posts will appear as they\'re scheduled.');
+        refreshSeries();
+      }
       setCaption('');
-      setScheduledTime('');
-      setSaveStatusMessage('Status scheduled successfully and added to queue!');
       setTimeout(() => setSaveStatusMessage(null), 3000);
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
@@ -87,6 +131,20 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
       }
     } finally {
       setCheckingQuota(false);
+    }
+  };
+
+  const toggleWeekday = (day: number) => {
+    setWeekdays(prev => (prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day].sort()));
+  };
+
+  const handleCancelSeries = async (id: string) => {
+    try {
+      await apiClient.cancelRecurringSeries(id);
+      refreshSeries();
+    } catch (err) {
+      setSaveStatusMessage(err instanceof ApiError ? err.message : 'Could not cancel this series. Please try again.');
+      setTimeout(() => setSaveStatusMessage(null), 3000);
     }
   };
 
@@ -117,6 +175,25 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Form Controls (7 cols) */}
         <form onSubmit={handleScheduleSubmit} className="lg:col-span-7 p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-6">
+          {/* One-time vs Recurring Mode Toggle */}
+          <div>
+            <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Posting Mode</label>
+            <div className="flex p-1 bg-zinc-950 rounded-xl border border-zinc-800">
+              {(['ONCE', 'RECURRING'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setPostMode(mode)}
+                  className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+                    postMode === mode ? 'bg-emerald-500 text-zinc-950 shadow-md' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {mode === 'ONCE' ? '1️⃣ One-time' : '🔁 Recurring'}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Status Type Selector */}
           <div>
             <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Select Status Type</label>
@@ -217,17 +294,113 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
             </div>
           </div>
 
-          {/* Scheduled Time Input */}
-          <div>
-            <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Schedule Publish Time</label>
-            <input
-              type="datetime-local"
-              value={scheduledTime}
-              onChange={(e) => setScheduledTime(e.target.value)}
-              className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500"
-              required
-            />
-          </div>
+          {postMode === 'ONCE' ? (
+            /* Scheduled Time Input */
+            <div>
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Schedule Publish Time</label>
+              <input
+                type="datetime-local"
+                value={scheduledTime}
+                onChange={(e) => setScheduledTime(e.target.value)}
+                className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500"
+                required
+              />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Recurrence Type */}
+              <div>
+                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Repeats</label>
+                <div className="flex p-1 bg-zinc-950 rounded-xl border border-zinc-800">
+                  {(['INTERVAL', 'WEEKDAYS'] as const).map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setRecurrenceType(type)}
+                      className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+                        recurrenceType === type ? 'bg-emerald-500 text-zinc-950 shadow-md' : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      {type === 'INTERVAL' ? 'Every N days' : 'Specific weekdays'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {recurrenceType === 'INTERVAL' ? (
+                <div>
+                  <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Interval</label>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {INTERVAL_PRESETS.map(preset => (
+                      <button
+                        key={preset.days}
+                        type="button"
+                        onClick={() => setIntervalDays(preset.days)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          intervalDays === preset.days ? 'bg-emerald-500 text-zinc-950' : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-zinc-400">Every</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={intervalDays}
+                      onChange={(e) => setIntervalDays(Math.max(1, Number(e.target.value) || 1))}
+                      className="w-20 p-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-500"
+                    />
+                    <span className="text-xs text-zinc-400">day{intervalDays === 1 ? '' : 's'}</span>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-2">On these days</label>
+                  <div className="flex gap-2">
+                    {WEEKDAY_LABELS.map((label, day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => toggleWeekday(day)}
+                        className={`w-10 h-10 rounded-lg text-xs font-semibold transition-all ${
+                          weekdays.includes(day) ? 'bg-emerald-500 text-zinc-950' : 'bg-zinc-950 text-zinc-400 border border-zinc-800 hover:text-zinc-200'
+                        }`}
+                      >
+                        {label[0]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Starts</label>
+                  <input
+                    type="datetime-local"
+                    value={recurStartAt}
+                    onChange={(e) => setRecurStartAt(e.target.value)}
+                    className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500"
+                    required
+                  />
+                  <p className="text-[11px] text-zinc-500 mt-1">Also sets the time of day every post fires.</p>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-2">Ends</label>
+                  <input
+                    type="datetime-local"
+                    value={recurEndAt}
+                    onChange={(e) => setRecurEndAt(e.target.value)}
+                    className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Submit Action */}
           <button
@@ -235,7 +408,11 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
             disabled={checkingQuota}
             className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 font-semibold text-zinc-950 text-sm rounded-xl transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-60"
           >
-            {checkingQuota ? 'Checking your plan...' : '🚀 Schedule Status Post'}
+            {checkingQuota
+              ? 'Checking your plan...'
+              : postMode === 'ONCE'
+              ? '🚀 Schedule Status Post'
+              : '🔁 Create Recurring Series'}
           </button>
         </form>
 
@@ -296,6 +473,41 @@ export const StatusComposer: React.FC<StatusComposerProps> = ({ onNavigateToBill
           </div>
         </div>
       </div>
+
+      {/* Active Recurring Series */}
+      {activeSeries.length > 0 && (
+        <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
+          <h3 className="font-bold text-base text-white">Active Recurring Series</h3>
+          <div className="space-y-3">
+            {activeSeries.map((series) => (
+              <div key={series.id} className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-4">
+                  <span className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center">
+                    {series.mediaType}
+                  </span>
+                  <div>
+                    <div className="text-sm font-medium text-white truncate max-w-md">{series.caption || '(no caption)'}</div>
+                    <div className="text-xs text-zinc-400 mt-1">
+                      {series.recurrenceType === 'INTERVAL'
+                        ? `Every ${series.intervalDays} day${series.intervalDays === 1 ? '' : 's'}`
+                        : `On ${(series.weekdays ?? []).map(d => WEEKDAY_LABELS[d]).join(', ')}`}
+                      {' · '}
+                      {new Date(series.startAt).toLocaleDateString()} → {new Date(series.endAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCancelSeries(series.id)}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-red-500/10 hover:text-red-400 text-zinc-300 text-xs font-medium border border-zinc-700 transition-all self-start sm:self-auto"
+                >
+                  Cancel Series
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Media Library Selector Modal */}
       {showMediaModal && (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -12,6 +12,20 @@ const EMOJIS = ['🔥', '🚀', '🎉', '❤️', '👏', '⚡', '✨', '💯'];
 const MAX_CAPTION_LENGTH = 700;
 
 type StatusType = 'text' | 'image' | 'video';
+type PostMode = 'once' | 'recurring';
+type RecurrenceType = 'INTERVAL' | 'WEEKDAYS';
+
+interface RecurringSeries {
+  id: string;
+  mediaType: 'TEXT' | 'IMAGE' | 'VIDEO';
+  caption: string | null;
+  recurrenceType: RecurrenceType;
+  intervalDays: number | null;
+  weekdays: number[] | null;
+  startAt: string;
+  endAt: string;
+  status: 'ACTIVE' | 'CANCELLED' | 'COMPLETED';
+}
 
 const SCHEDULE_PRESETS: { key: string; label: string; compute: () => Date }[] = [
   { key: 'in_1_hour', label: 'In 1 hour', compute: () => new Date(Date.now() + 60 * 60 * 1000) },
@@ -38,6 +52,23 @@ const SCHEDULE_PRESETS: { key: string; label: string; compute: () => Date }[] = 
   },
 ];
 
+const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+const INTERVAL_PRESETS = [
+  { label: 'Daily', days: 1 },
+  { label: 'Every 3 days', days: 3 },
+  { label: 'Weekly', days: 7 },
+  { label: 'Every 2 weeks', days: 14 },
+];
+
+const END_DURATION_PRESETS: { key: string; label: string; compute: (from: Date) => Date }[] = [
+  { key: '1w', label: '1 week', compute: (from) => new Date(from.getTime() + 7 * 24 * 60 * 60 * 1000) },
+  { key: '2w', label: '2 weeks', compute: (from) => new Date(from.getTime() + 14 * 24 * 60 * 60 * 1000) },
+  { key: '1m', label: '1 month', compute: (from) => new Date(from.getTime() + 30 * 24 * 60 * 60 * 1000) },
+  { key: '3m', label: '3 months', compute: (from) => new Date(from.getTime() + 90 * 24 * 60 * 60 * 1000) },
+];
+
 export default function ComposerScreen() {
   const router = useRouter();
   const [statusType, setStatusType] = useState<StatusType>('image');
@@ -49,9 +80,41 @@ export default function ComposerScreen() {
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [schedulePreset, setSchedulePreset] = useState(SCHEDULE_PRESETS[0].key);
 
+  const [postMode, setPostMode] = useState<PostMode>('once');
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('INTERVAL');
+  const [intervalDays, setIntervalDays] = useState(1);
+  const [weekdays, setWeekdays] = useState<number[]>([]);
+  const [startPreset, setStartPreset] = useState(SCHEDULE_PRESETS[0].key);
+  const [endDurationKey, setEndDurationKey] = useState(END_DURATION_PRESETS[0].key);
+  const [activeSeries, setActiveSeries] = useState<RecurringSeries[]>([]);
+
+  const refreshSeries = () => {
+    apiClient
+      .get('/posts/recurring')
+      .then(({ data }) => setActiveSeries((data.series ?? []).filter((s: RecurringSeries) => s.status === 'ACTIVE')))
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    refreshSeries();
+  }, []);
+
   const handleChangeStatusType = (next: StatusType) => {
     setStatusType(next);
     setMediaAsset(null);
+  };
+
+  const toggleWeekday = (day: number) => {
+    setWeekdays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort()));
+  };
+
+  const handleCancelSeries = async (id: string) => {
+    try {
+      await apiClient.post(`/posts/recurring/${id}/cancel`);
+      refreshSeries();
+    } catch (err: any) {
+      Alert.alert('Could not cancel', err?.response?.data?.error ?? 'Please try again.');
+    }
   };
 
   const handlePickMedia = async () => {
@@ -111,23 +174,44 @@ export default function ComposerScreen() {
       Alert.alert('Still uploading', 'Wait for the media upload to finish before scheduling.');
       return;
     }
+    if (postMode === 'recurring' && recurrenceType === 'WEEKDAYS' && weekdays.length === 0) {
+      Alert.alert('Pick a day', 'Choose at least one weekday for the series to repeat on.');
+      return;
+    }
 
-    const scheduledAt = SCHEDULE_PRESETS.find((p) => p.key === schedulePreset)!.compute();
     setSaving(true);
     try {
-      await apiClient.post('/posts', {
-        mediaType: statusType.toUpperCase(),
-        caption: caption || undefined,
-        mediaUrl: statusType !== 'text' ? mediaAsset?.remoteUrl : undefined,
-        scheduledAt: scheduledAt.toISOString(),
-      });
-      setSuccessMessage('Status scheduled successfully!');
+      if (postMode === 'once') {
+        const scheduledAt = SCHEDULE_PRESETS.find((p) => p.key === schedulePreset)!.compute();
+        await apiClient.post('/posts', {
+          mediaType: statusType.toUpperCase(),
+          caption: caption || undefined,
+          mediaUrl: statusType !== 'text' ? mediaAsset?.remoteUrl : undefined,
+          scheduledAt: scheduledAt.toISOString(),
+        });
+        setSuccessMessage('Status scheduled successfully!');
+      } else {
+        const startAt = SCHEDULE_PRESETS.find((p) => p.key === startPreset)!.compute();
+        const endAt = END_DURATION_PRESETS.find((p) => p.key === endDurationKey)!.compute(startAt);
+        await apiClient.post('/posts/recurring', {
+          mediaType: statusType.toUpperCase(),
+          caption: caption || undefined,
+          mediaUrl: statusType !== 'text' ? mediaAsset?.remoteUrl : undefined,
+          recurrenceType,
+          intervalDays: recurrenceType === 'INTERVAL' ? intervalDays : undefined,
+          weekdays: recurrenceType === 'WEEKDAYS' ? weekdays : undefined,
+          startAt: startAt.toISOString(),
+          endAt: endAt.toISOString(),
+        });
+        setSuccessMessage('Recurring series created!');
+        refreshSeries();
+      }
       setCaption('');
       setMediaAsset(null);
       setTimeout(() => setSuccessMessage(null), 2000);
     } catch (err: any) {
       if (err?.response?.status === 403) {
-        Alert.alert('Plan limit reached', err.response?.data?.error ?? 'Upgrade your plan to schedule more statuses.');
+        Alert.alert('Plan limit reached', err.response?.data?.error ?? 'Upgrade your plan to unlock this.');
       } else {
         Alert.alert('Could not schedule', err?.response?.data?.error ?? 'Please try again.');
       }
@@ -146,6 +230,15 @@ export default function ComposerScreen() {
             <Text style={styles.bannerText}>{successMessage}</Text>
           </View>
         )}
+
+        <SegmentedControl
+          options={[
+            { label: 'One-time', value: 'once' },
+            { label: 'Recurring', value: 'recurring' },
+          ]}
+          value={postMode}
+          onChange={setPostMode}
+        />
 
         <SegmentedControl
           options={[
@@ -250,23 +343,121 @@ export default function ComposerScreen() {
           </View>
         </View>
 
-        <View style={styles.scheduleGroup}>
-          <Text style={styles.label}>WHEN TO POST</Text>
-          <View style={styles.presetRow}>
-            {SCHEDULE_PRESETS.map((preset) => (
-              <Pressable
-                key={preset.key}
-                onPress={() => setSchedulePreset(preset.key)}
-                style={[styles.presetChip, schedulePreset === preset.key && styles.presetChipSelected]}
-              >
-                <Text style={[styles.presetLabel, schedulePreset === preset.key && styles.presetLabelSelected]}>{preset.label}</Text>
-              </Pressable>
+        {postMode === 'once' ? (
+          <View style={styles.scheduleGroup}>
+            <Text style={styles.label}>WHEN TO POST</Text>
+            <View style={styles.presetRow}>
+              {SCHEDULE_PRESETS.map((preset) => (
+                <Pressable
+                  key={preset.key}
+                  onPress={() => setSchedulePreset(preset.key)}
+                  style={[styles.presetChip, schedulePreset === preset.key && styles.presetChipSelected]}
+                >
+                  <Text style={[styles.presetLabel, schedulePreset === preset.key && styles.presetLabelSelected]}>{preset.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.scheduleResolved}>
+              Will publish {SCHEDULE_PRESETS.find((p) => p.key === schedulePreset)!.compute().toLocaleString()}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.scheduleGroup}>
+            <Text style={styles.label}>REPEATS</Text>
+            <SegmentedControl
+              options={[
+                { label: 'Every N days', value: 'INTERVAL' },
+                { label: 'Specific weekdays', value: 'WEEKDAYS' },
+              ]}
+              value={recurrenceType}
+              onChange={setRecurrenceType}
+            />
+
+            {recurrenceType === 'INTERVAL' ? (
+              <View style={styles.presetRow}>
+                {INTERVAL_PRESETS.map((preset) => (
+                  <Pressable
+                    key={preset.days}
+                    onPress={() => setIntervalDays(preset.days)}
+                    style={[styles.presetChip, intervalDays === preset.days && styles.presetChipSelected]}
+                  >
+                    <Text style={[styles.presetLabel, intervalDays === preset.days && styles.presetLabelSelected]}>{preset.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.weekdayRow}>
+                {WEEKDAY_LABELS.map((label, day) => (
+                  <Pressable
+                    key={day}
+                    onPress={() => toggleWeekday(day)}
+                    style={[styles.weekdayDot, weekdays.includes(day) && styles.weekdayDotSelected]}
+                    accessibilityLabel={WEEKDAY_NAMES[day]}
+                  >
+                    <Text style={[styles.weekdayLabel, weekdays.includes(day) && styles.weekdayLabelSelected]}>{label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            <Text style={styles.label}>STARTS</Text>
+            <View style={styles.presetRow}>
+              {SCHEDULE_PRESETS.map((preset) => (
+                <Pressable
+                  key={preset.key}
+                  onPress={() => setStartPreset(preset.key)}
+                  style={[styles.presetChip, startPreset === preset.key && styles.presetChipSelected]}
+                >
+                  <Text style={[styles.presetLabel, startPreset === preset.key && styles.presetLabelSelected]}>{preset.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={styles.label}>ENDS</Text>
+            <View style={styles.presetRow}>
+              {END_DURATION_PRESETS.map((preset) => (
+                <Pressable
+                  key={preset.key}
+                  onPress={() => setEndDurationKey(preset.key)}
+                  style={[styles.presetChip, endDurationKey === preset.key && styles.presetChipSelected]}
+                >
+                  <Text style={[styles.presetLabel, endDurationKey === preset.key && styles.presetLabelSelected]}>{preset.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={styles.scheduleResolved}>
+              {(() => {
+                const start = SCHEDULE_PRESETS.find((p) => p.key === startPreset)!.compute();
+                const end = END_DURATION_PRESETS.find((p) => p.key === endDurationKey)!.compute(start);
+                return `Starts ${start.toLocaleString()} · Ends ${end.toLocaleDateString()}`;
+              })()}
+            </Text>
+          </View>
+        )}
+
+        {activeSeries.length > 0 && (
+          <View style={styles.scheduleGroup}>
+            <Text style={styles.label}>ACTIVE RECURRING SERIES</Text>
+            {activeSeries.map((series) => (
+              <View key={series.id} style={styles.seriesRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.seriesCaption} numberOfLines={1}>
+                    {series.caption || `${series.mediaType} status`}
+                  </Text>
+                  <Text style={styles.seriesDetail}>
+                    {series.recurrenceType === 'INTERVAL'
+                      ? `Every ${series.intervalDays} day${series.intervalDays === 1 ? '' : 's'}`
+                      : `On ${(series.weekdays ?? []).map((d: number) => WEEKDAY_NAMES[d]).join(', ')}`}
+                  </Text>
+                </View>
+                <Pressable onPress={() => handleCancelSeries(series.id)}>
+                  <Text style={styles.seriesCancel}>Cancel</Text>
+                </Pressable>
+              </View>
             ))}
           </View>
-          <Text style={styles.scheduleResolved}>
-            Will publish {SCHEDULE_PRESETS.find((p) => p.key === schedulePreset)!.compute().toLocaleString()}
-          </Text>
-        </View>
+        )}
       </ScrollView>
 
       <View style={styles.actionBar}>
@@ -275,7 +466,9 @@ export default function ComposerScreen() {
         </Pressable>
         <Pressable style={styles.scheduleButton} onPress={handleScheduleStatus} disabled={saving || uploadingMedia}>
           <MaterialIcons name="schedule" size={18} color={Colors.onPrimary} />
-          <Text style={styles.scheduleLabel}>{saving ? 'Scheduling...' : 'Schedule Status'}</Text>
+          <Text style={styles.scheduleLabel}>
+            {saving ? 'Scheduling...' : postMode === 'once' ? 'Schedule Status' : 'Create Series'}
+          </Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -416,6 +609,48 @@ const styles = StyleSheet.create({
   scheduleResolved: {
     ...Typography.bodySm,
     color: Colors.onSurfaceVariant,
+  },
+  weekdayRow: { flexDirection: 'row', gap: Spacing.xs },
+  weekdayDot: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+  },
+  weekdayDotSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  weekdayLabel: {
+    ...Typography.labelSm,
+    color: Colors.onSurfaceVariant,
+  },
+  weekdayLabelSelected: {
+    color: Colors.onPrimary,
+  },
+  seriesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.outlineVariant,
+  },
+  seriesCaption: {
+    ...Typography.labelMd,
+    color: Colors.onSurface,
+  },
+  seriesDetail: {
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
+  },
+  seriesCancel: {
+    ...Typography.labelSm,
+    color: Colors.error,
   },
   actionBar: {
     flexDirection: 'row',
