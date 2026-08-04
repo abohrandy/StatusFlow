@@ -216,4 +216,22 @@ export class WhatsAppConnection extends EventEmitter {
     this.sock?.end(undefined);
     this.sock = null;
   }
+
+  /**
+   * Unlinks the device from WhatsApp for good — use for a user-initiated "Disconnect", not
+   * the worker's between-sends teardown (see close()). Best-effort: if there's no live
+   * socket to send the logout IQ over, this just clears local state; the caller is still
+   * responsible for deleting this session's persisted Redis auth state so a stale device
+   * doesn't silently remain reachable with the old credentials.
+   */
+  async logout(): Promise<void> {
+    this.closingIntentionally = true;
+    try {
+      await this.sock?.logout();
+    } catch {
+      // Already logged out, or the socket is dead — nothing more to do.
+    } finally {
+      this.sock = null;
+    }
+  }
 }

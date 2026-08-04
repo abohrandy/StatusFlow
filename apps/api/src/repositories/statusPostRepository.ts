@@ -27,10 +27,10 @@ const SELECT_WITH_MEDIA = `
 `;
 
 /**
- * There's no real media upload/storage pipeline yet (media_files.file_url is designed
- * for an S3/presigned URL per docs/DATABASE.md, but nothing writes to it today) — for
- * now this just records whatever URL the client already had (e.g. a picked-from-library
- * URL) so status_posts.media_file_id keeps pointing at a real row like the schema expects.
+ * The real media upload pipeline lives in routes/media.ts + storage.ts (Supabase Storage) —
+ * this is a separate, narrower path: it just records a URL the client already obtained
+ * (normally from that real upload) against status_posts.media_file_id, so the schema's
+ * foreign key keeps pointing at a real media_files row.
  */
 async function createMediaFile(userId: string, mediaType: MediaType, mediaUrl: string): Promise<string> {
   const result = await pool.query<{ id: string }>(

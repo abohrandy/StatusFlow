@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { assertCanConnectWhatsAppAccount, SubscriptionError, type PlanSlug } from '@statusflow/subscriptions';
-import { WhatsAppConnection, type ConnectionStatus } from '@statusflow/baileys-engine';
+import { WhatsAppConnection, clearRedisAuthState, type ConnectionStatus } from '@statusflow/baileys-engine';
 import { requireAuth } from '../middleware/auth';
 import { rateLimiter } from '../middleware/rateLimiter';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -136,6 +136,19 @@ whatsappRouter.post('/pairing/confirm', rateLimiter(300, 15 * 60 * 1000, (req) =
 }));
 
 whatsappRouter.post('/disconnect', asyncHandler(async (req, res) => {
+  // Previously this only flipped the DB row to DISCONNECTED — the live Baileys socket (and
+  // the phone's Linked Devices entry) kept running untouched. Actually unlink the device and
+  // drop its persisted Redis credentials so a "disconnected" session can't silently keep
+  // working or be reconnected to without a fresh pairing.
+  const session = await getLatestSession(req.user!.id);
+  if (session) {
+    const connection = activeConnections.get(session.id);
+    if (connection) {
+      await connection.logout();
+      activeConnections.delete(session.id);
+    }
+    await clearRedisAuthState(session.id, redisConnection);
+  }
   await markSessionDisconnected(req.user!.id);
   res.json({ ok: true });
 }));

@@ -298,13 +298,13 @@ export class ApiClient {
   // --- Profile ---------------------------------------------------------------
 
   getProfile() {
-    return this.request<{ onboarded: boolean; fullName: string | null; companyName: string | null }>('/profile');
+    return this.request<{ onboarded: boolean; fullName: string | null; companyName: string | null; timezone: string; role: 'USER' | 'ADMIN' }>('/profile');
   }
 
-  saveProfile(fullName: string, companyName: string) {
-    return this.request<{ fullName: string; companyName: string }>('/profile', {
+  saveProfile(fullName: string, companyName: string, timezone?: string) {
+    return this.request<{ fullName: string; companyName: string; timezone: string }>('/profile', {
       method: 'PUT',
-      body: JSON.stringify({ fullName, companyName }),
+      body: JSON.stringify({ fullName, companyName, timezone }),
     });
   }
 }

@@ -89,9 +89,10 @@ export async function getUserCreatedAt(userId: string): Promise<Date | null> {
 }
 
 export async function getActiveSubscription(userId: string): Promise<SubscriptionRow | null> {
-  // Super Admin override: ADMIN users bypass all account/post limits by inheriting monthly-business features
-  const userCheck = await pool.query<{ role: string; email: string }>('SELECT role, email FROM users WHERE id = $1', [userId]);
-  if (userCheck.rows[0]?.role === 'ADMIN' || userCheck.rows[0]?.email === 'abohrandy@gmail.com') {
+  // Super Admin override: ADMIN users (a real, DB-driven role — see database/seeds) bypass
+  // all account/post limits by inheriting monthly-business features.
+  const userCheck = await pool.query<{ role: string }>('SELECT role FROM users WHERE id = $1', [userId]);
+  if (userCheck.rows[0]?.role === 'ADMIN') {
     return {
       id: 'admin-override',
       user_id: userId,

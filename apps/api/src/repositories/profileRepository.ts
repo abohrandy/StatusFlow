@@ -19,14 +19,16 @@ export async function upsertProfile(params: {
   userId: string;
   fullName: string;
   companyName: string;
+  timezone?: string;
 }): Promise<ProfileRow> {
   const result = await pool.query<ProfileRow>(
-    `INSERT INTO profiles (user_id, full_name, company_name)
-     VALUES ($1, $2, $3)
+    `INSERT INTO profiles (user_id, full_name, company_name, timezone)
+     VALUES ($1, $2, $3, COALESCE($4, 'UTC'))
      ON CONFLICT (user_id) DO UPDATE
-     SET full_name = EXCLUDED.full_name, company_name = EXCLUDED.company_name
+     SET full_name = EXCLUDED.full_name, company_name = EXCLUDED.company_name,
+         timezone = COALESCE($4, profiles.timezone)
      RETURNING *`,
-    [params.userId, params.fullName, params.companyName],
+    [params.userId, params.fullName, params.companyName, params.timezone ?? null],
   );
   return result.rows[0];
 }
