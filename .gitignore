@@ -4,3 +4,9 @@ build/
 .env
 .env.local
 *.log
+
+# Expo: this is a managed workflow — apps/mobile/android and ios are generated on demand
+# by `expo prebuild` (or EAS Build), not source-controlled native projects.
+apps/mobile/android/
+apps/mobile/ios/
+apps/mobile/.expo/
