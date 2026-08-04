@@ -85,6 +85,13 @@ export class WhatsAppConnection extends EventEmitter {
         // invalidates it: WhatsApp then rejects it with "couldn't link device". A much
         // longer window means the socket survives for as long as pairing realistically takes.
         qrTimeout: 5 * 60_000,
+        // Baileys' default (60s) was observed in production timing out its own post-connect
+        // handshake (executeInitQueries -> fetchProps -> query -> waitForMessage, per the
+        // worker's logs: "unexpected error in 'init queries' ... Timed Out") on every retry
+        // attempt, at exactly the 60s mark each time — not a throttling pattern that would
+        // improve on later, more-spaced-out attempts, but a step that consistently needs
+        // more room than the default gives it.
+        defaultQueryTimeoutMs: 120_000,
       });
 
       sock.ev.on('creds.update', saveCreds);
