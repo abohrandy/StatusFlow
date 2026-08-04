@@ -4,6 +4,7 @@ import { Boom } from '@hapi/boom';
 import { fetchLatestBaileysVersion, makeWASocket, DisconnectReason, type WASocket } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import { useRedisAuthState } from './redisAuthState';
+import { addContactJids, getContactJids } from './contactsStore';
 
 export type ConnectionStatus = 'connecting' | 'open' | 'close';
 
@@ -37,11 +38,10 @@ async function getBaileysVersion(): Promise<[number, number, number]> {
  * `@whiskeysockets/baileys` underneath — see redisAuthState.ts for why auth state lives
  * in Redis instead of the filesystem.
  *
- * NOTE: WhatsApp's actual status-broadcast wire behavior (visibility to contacts,
- * exact accepted media formats) can only be confirmed by pairing a real phone number
- * and watching it land on that phone's Status tab — this class follows Baileys'
- * documented `sendMessage('status@broadcast', ..., { broadcast: true })` contract, but
- * has not been exercised against a live WhatsApp account.
+ * NOTE: a status broadcast is only visible to the JIDs passed as `statusJidList` (see
+ * contactsStore.ts) — `sendMessage('status@broadcast', ..., { broadcast: true })` alone
+ * resolves successfully but reaches nobody, since WhatsApp's server doesn't fan a status
+ * out on its own the way it does a group message.
  */
 export class WhatsAppConnection extends EventEmitter {
   private sock: WASocket | null = null;
@@ -88,6 +88,18 @@ export class WhatsAppConnection extends EventEmitter {
       });
 
       sock.ev.on('creds.update', saveCreds);
+      // The contact list a status broadcast can actually reach (see contactsStore.ts) —
+      // 'messaging-history.set' delivers the initial batch right after connecting,
+      // 'contacts.upsert'/'contacts.update' cover anything added or changed after that.
+      sock.ev.on('messaging-history.set', ({ contacts }) => {
+        void addContactJids(this.sessionId, this.redis, contacts.map((c) => c.id));
+      });
+      sock.ev.on('contacts.upsert', (contacts) => {
+        void addContactJids(this.sessionId, this.redis, contacts.map((c) => c.id));
+      });
+      sock.ev.on('contacts.update', (contacts) => {
+        void addContactJids(this.sessionId, this.redis, contacts.map((c) => c.id));
+      });
       sock.ev.on('connection.update', (update) => {
         if (update.qr) {
           this.qrReady = true;
@@ -209,21 +221,35 @@ export class WhatsAppConnection extends EventEmitter {
     // now-dead socket instead of the one that actually reached 'open'.
     const sock = await this.ensureSocket();
 
+    // Unlike a group chat, WhatsApp's server doesn't fan a status broadcast out on its
+    // own — Baileys only encrypts it for the JIDs listed in `statusJidList`. Omitting it
+    // doesn't error: sendMessage resolves normally, the post gets marked COMPLETED, and
+    // the status is delivered to nobody. Failing loudly here beats a silent no-op.
+    const statusJidList = await getContactJids(this.sessionId, this.redis);
+    if (statusJidList.length === 0) {
+      throw new Error(
+        'No synced WhatsApp contacts yet, so this status would not be visible to anyone. ' +
+          'WhatsApp syncs your contact list shortly after pairing — try again in a minute, ' +
+          'or reconnect WhatsApp if this keeps happening.',
+      );
+    }
+    const sendOpts = { broadcast: true, statusJidList } as const;
+
     if (input.mediaType === 'TEXT') {
-      await sock.sendMessage('status@broadcast', { text: input.caption ?? '' }, { broadcast: true });
+      await sock.sendMessage('status@broadcast', { text: input.caption ?? '' }, sendOpts);
     } else if (input.mediaType === 'IMAGE') {
       if (!input.mediaUrl) throw new Error('mediaUrl is required for an IMAGE status.');
       await sock.sendMessage(
         'status@broadcast',
         { image: { url: input.mediaUrl }, caption: input.caption ?? undefined },
-        { broadcast: true },
+        sendOpts,
       );
     } else {
       if (!input.mediaUrl) throw new Error('mediaUrl is required for a VIDEO status.');
       await sock.sendMessage(
         'status@broadcast',
         { video: { url: input.mediaUrl }, caption: input.caption ?? undefined },
-        { broadcast: true },
+        sendOpts,
       );
     }
   }
