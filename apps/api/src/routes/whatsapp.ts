@@ -22,6 +22,38 @@ export const whatsappRouter = Router();
 whatsappRouter.use(requireAuth);
 const activeConnections = new Map<string, WhatsAppConnection>();
 
+// A connection that never reaches 'open' (user never finishes pairing) used to sit in
+// activeConnections forever — one leaked in-memory entry, and one live-but-stuck Baileys
+// socket, per abandoned pairing attempt, for the lifetime of the API process.
+const PAIRING_ABANDON_TIMEOUT_MS = 10 * 60 * 1000;
+
+function registerConnection(sessionId: string, connection: WhatsAppConnection): void {
+  activeConnections.set(sessionId, connection);
+  setTimeout(() => {
+    // Only clean up if this is still the registered connection for the session (not
+    // already superseded or already cleaned up via the success path below) and it never
+    // reached 'open' — an abandoned pairing attempt, not a live one.
+    if (activeConnections.get(sessionId) === connection && connection.getStatus() !== 'open') {
+      activeConnections.delete(sessionId);
+      void connection.close();
+    }
+  }, PAIRING_ABANDON_TIMEOUT_MS);
+}
+
+/** The API doesn't need to keep a WhatsApp socket open once pairing is confirmed — the
+ * worker opens its own connection (from these same Redis-persisted creds) whenever it
+ * actually needs to publish. Previously this connection stayed open (and in
+ * activeConnections) forever after every successful pairing: a leaked socket per user
+ * who ever paired, which also risked WhatsApp treating the worker's later connection as
+ * a "replacement" for this still-open one mid-send (see WorkerProcessor.ts's
+ * session-serialization comment). */
+function releaseConnection(sessionId: string, connection: WhatsAppConnection): void {
+  if (activeConnections.get(sessionId) === connection) {
+    activeConnections.delete(sessionId);
+  }
+  void connection.close();
+}
+
 // Loose E.164-ish check (leading +, 8-15 digits) — good enough to reject obvious garbage
 // without rejecting real international numbers in unfamiliar formats.
 const PHONE_NUMBER_PATTERN = /^\+?[1-9]\d{7,14}$/;
@@ -59,7 +91,7 @@ whatsappRouter.post('/pairing/request', rateLimiter(10, 15 * 60 * 1000, (req) =>
 
   const session = await createPairingSession(req.user!.id, method === 'PAIRING_CODE' ? normalizedPhoneNumber : '');
   const connection = new WhatsAppConnection(session.id, redisConnection);
-  activeConnections.set(session.id, connection);
+  registerConnection(session.id, connection);
   // Marking CONNECTED as soon as the socket opens — rather than waiting solely on the
   // client's /pairing/confirm poll to catch it — closes the gap where a deploy restarts
   // this process between the phone finishing pairing and the next poll arriving: the DB
@@ -67,9 +99,11 @@ whatsappRouter.post('/pairing/request', rateLimiter(10, 15 * 60 * 1000, (req) =>
   // activeConnections entry that would otherwise answer /pairing/confirm is gone.
   connection.on('status', (status: ConnectionStatus) => {
     if (status === 'open') {
-      markSessionConnected(session.id, req.user!.id).catch((err) => {
-        console.error('[WhatsApp] Failed to persist CONNECTED status:', describeError(err));
-      });
+      markSessionConnected(session.id, req.user!.id)
+        .then(() => releaseConnection(session.id, connection))
+        .catch((err) => {
+          console.error('[WhatsApp] Failed to persist CONNECTED status:', describeError(err));
+        });
     }
   });
   if (method === 'QR_CODE') {
@@ -93,7 +127,6 @@ whatsappRouter.post('/pairing/request', rateLimiter(10, 15 * 60 * 1000, (req) =>
     console.error('[WhatsApp] Pairing code request failed:', describeError(err));
     return res.status(502).json({ error: `WhatsApp pairing could not be started: ${describeError(err)}` });
   }
-  activeConnections.set(session.id, connection);
   if (planSlug === 'free') await recordTrialPhoneNumber(normalizedPhoneNumber, req.user!.id);
 
   res.status(201).json({ sessionId: session.id, pairingCode });
@@ -121,7 +154,7 @@ whatsappRouter.post('/pairing/confirm', rateLimiter(300, 15 * 60 * 1000, (req) =
   let connection = activeConnections.get(sessionId);
   if (!connection) {
     connection = new WhatsAppConnection(sessionId, redisConnection);
-    activeConnections.set(sessionId, connection);
+    registerConnection(sessionId, connection);
   }
   if (!(await connection.waitUntilOpen(2_000))) {
     return res.status(409).json({ error: 'WhatsApp pairing has not been completed yet.' });
@@ -131,6 +164,12 @@ whatsappRouter.post('/pairing/confirm', rateLimiter(300, 15 * 60 * 1000, (req) =
   if (!session) {
     return res.status(404).json({ error: 'No matching pairing session found.' });
   }
+
+  // Confirmed open — see releaseConnection's docstring for why the API doesn't hold onto
+  // this socket any further (the 'status' listener in /pairing/request usually gets there
+  // first; this covers the case where that connection was already gone, e.g. after a
+  // redeploy, and this route rebuilt a fresh one).
+  releaseConnection(sessionId, connection);
 
   res.json({ connected: true, phoneNumber: session.phone_number });
 }));
