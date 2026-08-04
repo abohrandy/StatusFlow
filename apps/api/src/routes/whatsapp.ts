@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { assertCanConnectWhatsAppAccount, SubscriptionError, type PlanSlug } from '@statusflow/subscriptions';
-import { WhatsAppConnection, clearRedisAuthState, type ConnectionStatus } from '@statusflow/baileys-engine';
+import { WhatsAppConnection, clearRedisAuthState, getContactJids, type ConnectionStatus } from '@statusflow/baileys-engine';
 import { requireAuth } from '../middleware/auth';
 import { rateLimiter } from '../middleware/rateLimiter';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -51,7 +51,33 @@ function releaseConnection(sessionId: string, connection: WhatsAppConnection): v
   if (activeConnections.get(sessionId) === connection) {
     activeConnections.delete(sessionId);
   }
-  void connection.close();
+  connection.close().catch((err) => {
+    console.error(`[WhatsApp:${sessionId}] Failed to close connection:`, describeError(err));
+  });
+}
+
+const CONTACT_SYNC_WAIT_MS = 30_000;
+const CONTACT_SYNC_POLL_INTERVAL_MS = 3_000;
+
+/**
+ * Closing the instant a connection reaches 'open' (see releaseConnection above) raced
+ * ahead of Baileys' initial contact sync ('messaging-history.set', which is what actually
+ * populates statusJidList — see contactsStore.ts) — that event arrives asynchronously
+ * after 'open', sometimes several seconds later, not as part of it. Closing before it
+ * landed left a session showing CONNECTED forever while permanently unable to post (every
+ * status send throws "No synced WhatsApp contacts yet"), since a plain reconnect doesn't
+ * reliably re-trigger a fresh history sync. Wait for at least one contact — or give up
+ * after a bounded window, so a session with a genuinely empty/private contact list still
+ * gets released — before releasing.
+ */
+async function releaseConnectionAfterContactSync(sessionId: string, connection: WhatsAppConnection): Promise<void> {
+  const deadline = Date.now() + CONTACT_SYNC_WAIT_MS;
+  while (Date.now() < deadline) {
+    const contacts = await getContactJids(sessionId, redisConnection);
+    if (contacts.length > 0) break;
+    await new Promise((resolve) => setTimeout(resolve, CONTACT_SYNC_POLL_INTERVAL_MS));
+  }
+  releaseConnection(sessionId, connection);
 }
 
 // Loose E.164-ish check (leading +, 8-15 digits) — good enough to reject obvious garbage
@@ -100,7 +126,7 @@ whatsappRouter.post('/pairing/request', rateLimiter(10, 15 * 60 * 1000, (req) =>
   connection.on('status', (status: ConnectionStatus) => {
     if (status === 'open') {
       markSessionConnected(session.id, req.user!.id)
-        .then(() => releaseConnection(session.id, connection))
+        .then(() => releaseConnectionAfterContactSync(session.id, connection))
         .catch((err) => {
           console.error('[WhatsApp] Failed to persist CONNECTED status:', describeError(err));
         });
@@ -165,11 +191,14 @@ whatsappRouter.post('/pairing/confirm', rateLimiter(300, 15 * 60 * 1000, (req) =
     return res.status(404).json({ error: 'No matching pairing session found.' });
   }
 
-  // Confirmed open — see releaseConnection's docstring for why the API doesn't hold onto
-  // this socket any further (the 'status' listener in /pairing/request usually gets there
-  // first; this covers the case where that connection was already gone, e.g. after a
-  // redeploy, and this route rebuilt a fresh one).
-  releaseConnection(sessionId, connection);
+  // Confirmed open — see releaseConnectionAfterContactSync's docstring for why the API
+  // doesn't hold onto this socket any further (the 'status' listener in /pairing/request
+  // usually gets there first; this covers the case where that connection was already gone,
+  // e.g. after a redeploy, and this route rebuilt a fresh one). Not awaited: it can take up
+  // to 30s, and this client polls every 3s expecting a prompt response.
+  releaseConnectionAfterContactSync(sessionId, connection).catch((err) => {
+    console.error(`[WhatsApp:${sessionId}] Failed while waiting to release connection:`, describeError(err));
+  });
 
   res.json({ connected: true, phoneNumber: session.phone_number });
 }));
