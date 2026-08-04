@@ -4,7 +4,9 @@
 # native WebSocket global Node 20 doesn't have).
 FROM node:22-alpine AS base
 WORKDIR /app
-RUN npm install -g pnpm
+# Pinned to match package.json's "packageManager" — see apps/api/Dockerfile for why an
+# unpinned `npm install -g pnpm` breaks `pnpm install --frozen-lockfile` below.
+RUN npm install -g pnpm@10.33.0
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/ ./packages/
