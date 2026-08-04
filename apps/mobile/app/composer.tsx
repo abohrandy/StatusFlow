@@ -91,12 +91,11 @@ export default function ComposerScreen() {
   };
 
   const handleSaveDraft = () => {
-    setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
-      setSuccessMessage('Draft saved successfully!');
-      setTimeout(() => setSuccessMessage(null), 3000);
-    }, 500);
+    // There's no draft-persistence endpoint yet — creating a post always requires a future
+    // scheduledAt and immediately enqueues it for publishing. Say so rather than claiming a
+    // save that didn't happen.
+    setSuccessMessage("Draft saving isn't available yet — schedule the post below to save it.");
+    setTimeout(() => setSuccessMessage(null), 4000);
   };
 
   const handleScheduleStatus = async () => {

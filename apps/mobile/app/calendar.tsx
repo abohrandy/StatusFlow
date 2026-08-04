@@ -1,23 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Card, EmptyState, TopAppBar } from '../components';
 import { Colors, Radius, Spacing, Typography } from '../theme';
+import { apiClient } from '../lib/apiClient';
 
-interface DayEvent {
-  title: string;
-  time: string;
-  status: 'success' | 'primary';
+interface Post {
+  id: string;
+  mediaType: string;
+  caption: string | null;
+  scheduledAt: string;
 }
-
-// Sample events keyed by day-of-month, for demonstration — a real backend would supply these.
-const SAMPLE_EVENTS: Record<number, DayEvent[]> = {
-  1: [{ title: 'Project Launch Announcement', time: '9:00 AM', status: 'primary' }],
-  12: [
-    { title: 'Product Showcase: Minimalist Collection', time: '9:00 AM', status: 'success' },
-    { title: 'Webinar Reminder: Workflow Mastery', time: '9:00 PM', status: 'primary' },
-  ],
-};
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -38,10 +31,28 @@ export default function CalendarScreen() {
   const today = new Date();
   const [cursor, setCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState(today.getDate());
+  const [posts, setPosts] = useState<Post[]>([]);
+
+  useEffect(() => {
+    Promise.allSettled([apiClient.get('/posts'), apiClient.get('/posts/history')]).then(([scheduled, history]) => {
+      const scheduledPosts = scheduled.status === 'fulfilled' ? scheduled.value.data.posts ?? [] : [];
+      const historyPosts = history.status === 'fulfilled' ? history.value.data.posts ?? [] : [];
+      setPosts([...scheduledPosts, ...historyPosts]);
+    });
+  }, []);
 
   const grid = useMemo(() => buildMonthGrid(cursor.getFullYear(), cursor.getMonth()), [cursor]);
-  const isCurrentMonth = cursor.getFullYear() === today.getFullYear() && cursor.getMonth() === today.getMonth();
-  const dayEvents = isCurrentMonth ? SAMPLE_EVENTS[selectedDay] : undefined;
+  const eventsByDay = useMemo(() => {
+    const map: Record<number, Post[]> = {};
+    for (const post of posts) {
+      const d = new Date(post.scheduledAt);
+      if (d.getFullYear() === cursor.getFullYear() && d.getMonth() === cursor.getMonth()) {
+        (map[d.getDate()] ??= []).push(post);
+      }
+    }
+    return map;
+  }, [posts, cursor]);
+  const dayEvents = eventsByDay[selectedDay];
 
   const changeMonth = (delta: number) => {
     setCursor((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
@@ -76,8 +87,8 @@ export default function CalendarScreen() {
           <View style={styles.grid}>
             {grid.map((day, index) => {
               if (day === null) return <View key={`blank-${index}`} style={styles.dayCell} />;
-              const hasEvents = isCurrentMonth && !!SAMPLE_EVENTS[day];
-              const isSelected = isCurrentMonth && day === selectedDay;
+              const hasEvents = !!eventsByDay[day]?.length;
+              const isSelected = day === selectedDay;
               return (
                 <Pressable key={day} style={styles.dayCell} onPress={() => setSelectedDay(day)}>
                   <View style={[styles.dayCircle, isSelected && styles.dayCircleSelected]}>
@@ -93,7 +104,7 @@ export default function CalendarScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
-              {isCurrentMonth ? `${MONTH_NAMES[cursor.getMonth()]} ${selectedDay}` : 'Select a day'}
+              {MONTH_NAMES[cursor.getMonth()]} {selectedDay}
             </Text>
             <Pressable onPress={() => router.push('/composer')}>
               <Text style={styles.scheduleLink}>+ Schedule</Text>
@@ -102,10 +113,10 @@ export default function CalendarScreen() {
 
           {dayEvents && dayEvents.length > 0 ? (
             <View style={styles.eventList}>
-              {dayEvents.map((event) => (
-                <Card key={event.title} style={styles.eventCard}>
-                  <Text style={styles.eventTime}>{event.time}</Text>
-                  <Text style={styles.eventTitle}>{event.title}</Text>
+              {dayEvents.map((post) => (
+                <Card key={post.id} style={styles.eventCard}>
+                  <Text style={styles.eventTime}>{new Date(post.scheduledAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>
+                  <Text style={styles.eventTitle}>{post.caption || `${post.mediaType} status`}</Text>
                 </Card>
               ))}
             </View>

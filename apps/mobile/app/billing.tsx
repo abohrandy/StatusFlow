@@ -1,29 +1,97 @@
-import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { Card, EmptyState, PricingCard, TopAppBar } from '../components';
 import { Colors, Spacing, Typography } from '../theme';
+import { apiClient } from '../lib/apiClient';
 
-type PlanTier = 'free' | 'weekly' | 'monthly';
+type PlanSlug = 'free' | 'weekly-pro' | 'monthly-business';
+
+interface Payment {
+  id: string;
+  plan_slug: string;
+  reference: string;
+  amount: number;
+  status: string;
+  created_at: string;
+}
+
+const PLAN_NAMES: Record<PlanSlug, string> = {
+  free: 'Free Starter',
+  'weekly-pro': 'Weekly Pro',
+  'monthly-business': 'Monthly Business',
+};
 
 export default function BillingScreen() {
   const router = useRouter();
-  const [currentPlan, setCurrentPlan] = useState<PlanTier>('free');
-  const [loadingPlan, setLoadingPlan] = useState<PlanTier | null>(null);
+  const [currentPlan, setCurrentPlan] = useState<PlanSlug>('free');
+  const [loadingPlan, setLoadingPlan] = useState<PlanSlug | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [payments, setPayments] = useState<Payment[]>([]);
 
-  const handleCheckout = (plan: PlanTier, amount: number) => {
+  /** Returns the freshly-fetched plan slug — callers that need it right away can't rely on
+   * `currentPlan` since setState doesn't update the value visible in the same closure. */
+  const refresh = useCallback(async (): Promise<PlanSlug> => {
+    try {
+      const [{ data: sub }, { data: history }] = await Promise.all([
+        apiClient.get('/billing/subscription'),
+        apiClient.get('/billing/payments'),
+      ]);
+      const slug = (sub?.plan?.slug as PlanSlug) ?? 'free';
+      setCurrentPlan(slug);
+      setPayments(history?.payments ?? []);
+      return slug;
+    } catch {
+      // Leave whatever we last had — a transient failure shouldn't blank the screen.
+      return currentPlan;
+    } finally {
+      setLoading(false);
+    }
+  }, [currentPlan]);
+
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleCheckout = async (plan: PlanSlug) => {
     setLoadingPlan(plan);
-    setTimeout(() => {
+    try {
+      const { data } = await apiClient.post('/billing/initialize', { planSlug: plan });
+      // Activation only ever happens server-side once Paystack's webhook fires with a
+      // verified signature (see apps/api/src/routes/billing.ts) — opening the checkout and
+      // refetching afterward is the correct client behavior, not a client-side "success".
+      await WebBrowser.openBrowserAsync(data.authorizationUrl);
+      // Give the webhook a moment to land, then re-check a few times before giving up.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const slug = await refresh();
+        if (slug === plan) break;
+      }
+      Alert.alert('Checkout complete', "If your payment succeeded, your plan will update within a few seconds. Pull down to refresh if it hasn't yet.");
+    } catch (err: any) {
+      Alert.alert('Could not start checkout', err?.response?.data?.error ?? 'Please try again.');
+    } finally {
       setLoadingPlan(null);
-      setCurrentPlan(plan);
-      Alert.alert('Payment successful', `₦${amount.toLocaleString()} charged via Paystack. You're now on the ${plan} plan.`);
-    }, 1200);
+    }
   };
 
   const handleCancelSubscription = () => {
     Alert.alert('Cancel Subscription', 'Are you sure you want to cancel your paid subscription?', [
       { text: 'Keep Subscription', style: 'cancel' },
-      { text: 'Confirm Cancel', style: 'destructive', onPress: () => setCurrentPlan('free') },
+      {
+        text: 'Confirm Cancel',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await apiClient.post('/billing/cancel');
+            await refresh();
+          } catch {
+            Alert.alert('Could not cancel', 'Please try again.');
+          }
+        },
+      },
     ]);
   };
 
@@ -34,9 +102,7 @@ export default function BillingScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Card style={styles.statusCard}>
           <Text style={styles.statusLabel}>CURRENT PLAN</Text>
-          <Text style={styles.statusValue}>
-            {currentPlan === 'free' ? 'Free Starter' : currentPlan === 'weekly' ? 'Weekly Pro' : 'Monthly Business'}
-          </Text>
+          <Text style={styles.statusValue}>{loading ? '...' : PLAN_NAMES[currentPlan]}</Text>
           <Text style={styles.statusDescription}>
             {currentPlan === 'free'
               ? '1 scheduled status every 7 days • 1 connected WhatsApp account'
@@ -69,10 +135,10 @@ export default function BillingScreen() {
             badge="MOST POPULAR"
             description="Perfect for everyday business owners."
             features={['Unlimited scheduled statuses', 'Schedule weeks ahead', 'Drafts & calendar', 'Priority publishing']}
-            ctaLabel={currentPlan === 'weekly' ? 'Current Plan' : loadingPlan === 'weekly' ? 'Processing...' : 'Upgrade with Paystack'}
-            ctaDisabled={currentPlan === 'weekly' || loadingPlan === 'weekly'}
-            onPressCta={() => handleCheckout('weekly', 2000)}
-            highlighted={currentPlan === 'weekly'}
+            ctaLabel={currentPlan === 'weekly-pro' ? 'Current Plan' : loadingPlan === 'weekly-pro' ? 'Processing...' : 'Upgrade with Paystack'}
+            ctaDisabled={currentPlan === 'weekly-pro' || loadingPlan !== null}
+            onPressCta={() => handleCheckout('weekly-pro')}
+            highlighted={currentPlan === 'weekly-pro'}
           />
 
           <PricingCard
@@ -82,16 +148,29 @@ export default function BillingScreen() {
             badge="BEST VALUE"
             description="Save money compared to paying weekly."
             features={['Everything in Weekly Pro', 'Priority support', 'Early access to new features']}
-            ctaLabel={currentPlan === 'monthly' ? 'Current Plan' : loadingPlan === 'monthly' ? 'Processing...' : 'Upgrade with Paystack'}
-            ctaDisabled={currentPlan === 'monthly' || loadingPlan === 'monthly'}
-            onPressCta={() => handleCheckout('monthly', 6000)}
-            highlighted={currentPlan === 'monthly'}
+            ctaLabel={currentPlan === 'monthly-business' ? 'Current Plan' : loadingPlan === 'monthly-business' ? 'Processing...' : 'Upgrade with Paystack'}
+            ctaDisabled={currentPlan === 'monthly-business' || loadingPlan !== null}
+            onPressCta={() => handleCheckout('monthly-business')}
+            highlighted={currentPlan === 'monthly-business'}
           />
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment History</Text>
-          <EmptyState icon="receipt-long" title="No payments yet" subtitle="Your Paystack payment history will appear here." />
+          {loading ? (
+            <ActivityIndicator color={Colors.primary} />
+          ) : payments.length === 0 ? (
+            <EmptyState icon="receipt-long" title="No payments yet" subtitle="Your Paystack payment history will appear here." />
+          ) : (
+            <View style={{ gap: Spacing.sm }}>
+              {payments.map((p) => (
+                <Card key={p.id} padding="sm">
+                  <Text style={styles.paymentPlan}>{p.plan_slug.replace('-', ' ')}</Text>
+                  <Text style={styles.paymentMeta}>₦{Number(p.amount).toLocaleString()} • {p.status} • {new Date(p.created_at).toLocaleDateString()}</Text>
+                </Card>
+              ))}
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -124,5 +203,15 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...Typography.headlineSm,
     color: Colors.onSurface,
+  },
+  paymentPlan: {
+    ...Typography.labelMd,
+    color: Colors.onSurface,
+    textTransform: 'capitalize',
+  },
+  paymentMeta: {
+    ...Typography.bodySm,
+    color: Colors.onSurfaceVariant,
+    marginTop: 2,
   },
 });

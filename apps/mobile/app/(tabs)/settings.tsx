@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/useAuthStore';
 import { Avatar, Card, TopAppBar } from '../../components';
 import { Colors, Radius, Spacing, Typography } from '../../theme';
+import { apiClient } from '../../lib/apiClient';
 
 interface SettingsRowProps {
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
@@ -29,33 +30,44 @@ const SettingsRow: React.FC<SettingsRowProps> = ({ icon, label, sublabel, onPres
 export default function SettingsScreen() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
-  const [fullName, setFullName] = useState('Randy Aboh');
-  const [timezone, setTimezone] = useState('WAT (UTC+1)');
-  const [notifyDisconnect, setNotifyDisconnect] = useState(true);
-  const [notifyFailure, setNotifyFailure] = useState(true);
+  const [fullName, setFullName] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [timezone, setTimezone] = useState('UTC');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const handleSaveProfile = () => {
+  useEffect(() => {
+    apiClient.get('/profile').then(({ data }) => {
+      if (data.fullName) setFullName(data.fullName);
+      if (data.companyName) setCompanyName(data.companyName);
+      if (data.timezone) setTimezone(data.timezone);
+    }).catch(() => undefined);
+  }, []);
+
+  const handleSaveProfile = async () => {
     setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
+    try {
+      await apiClient.put('/profile', { fullName, companyName, timezone });
       setMessage('Profile updated successfully!');
+    } catch {
+      setMessage('Could not save profile changes. Please try again.');
+    } finally {
+      setSaving(false);
       setTimeout(() => setMessage(null), 3000);
-    }, 600);
+    }
   };
 
   const handleExportData = () => {
-    Alert.alert('Export Data', 'Your account data JSON file download link has been sent to your email address.');
+    Alert.alert('Not available yet', 'Data export from the mobile app is coming soon. In the meantime, use the web dashboard\'s Settings > Data Portability export.');
   };
 
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
-      'Are you sure you want to permanently delete your StatusFlow account? This action cannot be undone.',
+      "Self-service account deletion isn't available yet. This will sign you out — to permanently delete your account and data, disconnect WhatsApp first, then contact an administrator.",
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete Account', style: 'destructive', onPress: () => logout() },
+        { text: 'Sign Out', style: 'destructive', onPress: () => logout() },
       ],
     );
   };
@@ -77,7 +89,7 @@ export default function SettingsScreen() {
             <Avatar fallbackLabel={fullName} size={56} />
             <View style={styles.profileFields}>
               <TextInput style={styles.input} value={fullName} onChangeText={setFullName} placeholder="Full name" />
-              <TextInput style={[styles.input, styles.inputDisabled]} value={user?.email || 'user@company.com'} editable={false} />
+              <TextInput style={[styles.input, styles.inputDisabled]} value={user?.email ?? ''} placeholder="No email on file" editable={false} />
             </View>
           </View>
           <View style={styles.fieldGroup}>
@@ -103,14 +115,18 @@ export default function SettingsScreen() {
         {/* Notification preferences */}
         <Card style={styles.section}>
           <Text style={styles.sectionTitle}>Notification Preferences</Text>
+          <Text style={styles.switchSublabel}>
+            Per-alert preferences aren't available yet — you'll get all WhatsApp disconnection and status-failure notifications
+            in the Notifications screen until this ships.
+          </Text>
           <View style={styles.switchRow}>
             <View style={styles.switchText}>
               <Text style={styles.switchLabel}>Disconnection alerts</Text>
               <Text style={styles.switchSublabel}>Notify when the WhatsApp session drops</Text>
             </View>
             <Switch
-              value={notifyDisconnect}
-              onValueChange={setNotifyDisconnect}
+              value
+              disabled
               trackColor={{ false: Colors.surfaceContainerHigh, true: Colors.primary }}
               thumbColor="#ffffff"
             />
@@ -121,8 +137,8 @@ export default function SettingsScreen() {
               <Text style={styles.switchSublabel}>Notify when a scheduled post fails</Text>
             </View>
             <Switch
-              value={notifyFailure}
-              onValueChange={setNotifyFailure}
+              value
+              disabled
               trackColor={{ false: Colors.surfaceContainerHigh, true: Colors.primary }}
               thumbColor="#ffffff"
             />

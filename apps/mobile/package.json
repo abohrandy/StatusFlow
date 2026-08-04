@@ -18,8 +18,6 @@
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native/assets-registry": "^0.74.87",
     "@statusflow/types": "workspace:*",
-    "@statusflow/utils": "workspace:*",
-    "@statusflow/validation": "workspace:*",
     "@supabase/supabase-js": "^2.39.8",
     "@tanstack/react-query": "^5.28.0",
     "axios": "^1.6.8",

@@ -2,12 +2,9 @@ import { create } from 'zustand';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
-const SUPER_ADMIN_EMAILS = ['abohrandy@gmail.com'];
-
 interface UserProfile {
   id: string;
   email: string;
-  role: 'USER' | 'ADMIN';
 }
 
 interface AuthState {
@@ -24,7 +21,6 @@ function toUserProfile(user: User | null): UserProfile | null {
   return {
     id: user.id,
     email: user.email,
-    role: SUPER_ADMIN_EMAILS.includes(user.email.toLowerCase()) ? 'ADMIN' : 'USER',
   };
 }
 
