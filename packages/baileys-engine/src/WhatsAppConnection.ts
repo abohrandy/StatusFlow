@@ -276,14 +276,21 @@ export class WhatsAppConnection extends EventEmitter {
     // own — Baileys only encrypts it for the JIDs listed in `statusJidList`. Omitting it
     // doesn't error: sendMessage resolves normally, the post gets marked COMPLETED, and
     // the status is delivered to nobody. Failing loudly here beats a silent no-op.
-    const statusJidList = await getContactJids(this.sessionId, this.redis);
-    if (statusJidList.length === 0) {
+    const contactJids = await getContactJids(this.sessionId, this.redis);
+    if (contactJids.length === 0) {
       throw new Error(
         'No synced WhatsApp contacts yet, so this status would not be visible to anyone. ' +
           'WhatsApp syncs your contact list shortly after pairing — try again in a minute, ' +
           'or reconnect WhatsApp if this keeps happening.',
       );
     }
+    // relayMessage's status/group branch (see @whiskeysockets/baileys/lib/Socket/messages-send.js)
+    // builds its device list *only* from statusJidList — unlike a normal 1:1 message, it does
+    // NOT automatically include the sender's own other devices. Without this, the status
+    // reaches your contacts but never syncs back to your own phone's "My Status" — which is
+    // exactly what "completed with zero errors, but nothing shows up when I check" looks like.
+    const selfJid = sock.user?.id;
+    const statusJidList = selfJid ? [...new Set([...contactJids, selfJid])] : contactJids;
     const sendOpts = { broadcast: true, statusJidList } as const;
 
     if (input.mediaType === 'TEXT') {
