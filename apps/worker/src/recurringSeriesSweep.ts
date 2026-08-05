@@ -60,7 +60,10 @@ async function sweepOneSeries(series: SeriesRow): Promise<void> {
       {
         jobId: postId,
         delay: Math.max(0, next.getTime() - Date.now()),
-        attempts: 3,
+        // See posts.ts's matching comment — more attempts to land on a clean connection,
+        // not masking a permanent failure (production logs show intermittent, not constant,
+        // handshake timeouts).
+        attempts: 5,
         backoff: { type: 'exponential', delay: 30_000 },
         removeOnComplete: true,
         removeOnFail: 1000,

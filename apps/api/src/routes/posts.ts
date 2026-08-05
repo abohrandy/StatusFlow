@@ -98,7 +98,12 @@ postsRouter.post('/', requireScheduleQuota, asyncHandler(async (req, res) => {
       jobId: post.id,
       delay: Math.max(0, scheduledAtMs - Date.now()),
       priority,
-      attempts: 3,
+      // Production logs show the underlying connection's post-connect handshake timing out
+      // intermittently — not every time, and not consistently (one attempt succeeded with
+      // zero errors while others needed retries) — a pattern consistent with transient
+      // network flakiness, not a hard failure. More attempts genuinely improve the odds of
+      // landing on a clean connection rather than papering over a permanent problem.
+      attempts: 5,
       backoff: { type: 'exponential', delay: 30_000 },
       removeOnComplete: true,
       removeOnFail: 1000,
