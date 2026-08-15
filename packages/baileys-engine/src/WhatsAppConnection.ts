@@ -157,7 +157,8 @@ export class WhatsAppConnection extends EventEmitter {
             // that keeps failing for any non-loggedOut reason (a stuck network path, a
             // WhatsApp-side issue) would hot-loop indefinitely in the background, invisible
             // to whoever's awaiting this connection (they've long since timed out on their
-            // own, e.g. waitUntilOpen's 20s). Give up and surface it as terminal instead.
+            // own, e.g. waitUntilOpen's caller-specified timeout). Give up and surface it
+            // as terminal instead.
             this.status = 'close';
             this.emit('status', this.status);
             this.emit('close', { statusCode, loggedOut, reconnectAttemptsExhausted: true });
@@ -280,7 +281,15 @@ export class WhatsAppConnection extends EventEmitter {
 
   /** Publishes a status update. Reuses the persisted session — no new pairing code needed if already connected before. */
   async sendStatus(input: SendStatusInput): Promise<void> {
-    const opened = await this.waitUntilOpen();
+    // waitUntilOpen()'s own 20s default is tuned for a quick status check (see
+    // apps/api/src/routes/whatsapp.ts), not for standing up a brand-new socket from
+    // scratch — the worker builds a fresh WhatsAppConnection per send (see
+    // WorkerProcessor.ts) and tears it down after, so this always pays the full connect
+    // handshake. That handshake was observed timing out at the 60s mark before
+    // defaultQueryTimeoutMs was raised to 120s above; giving it the same headroom here
+    // means a real send failure looks like one, instead of every attempt failing before
+    // the handshake even had a chance to finish.
+    const opened = await this.waitUntilOpen(120_000);
     if (!opened) {
       throw new Error('WhatsApp connection did not open in time.');
     }
