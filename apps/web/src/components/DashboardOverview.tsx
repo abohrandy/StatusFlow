@@ -184,6 +184,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                   <div className="min-w-0">
                     <div className="text-white font-medium truncate">{item.caption || `${item.mediaType} status`}</div>
                     <div className="text-zinc-500">{formatMediaAge(item.createdAt)}</div>
+                    {item.status === 'FAILED' && item.errorMessage && (
+                      <div className="text-red-400/80 truncate mt-0.5" title={item.errorMessage}>{item.errorMessage}</div>
+                    )}
                   </div>
                   <span className={`px-2 py-0.5 rounded-full font-mono shrink-0 ${item.status === 'COMPLETED' ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : 'text-red-400 bg-red-500/10 border border-red-500/20'}`}>
                     {item.status}

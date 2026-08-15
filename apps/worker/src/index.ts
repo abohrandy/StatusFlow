@@ -1,6 +1,7 @@
 import './queue';
 import { sweepExpiredSubscriptions } from './billingSweep';
 import { sweepRecurringSeries } from './recurringSeriesSweep';
+import { sweepStalledStatusPosts } from './postSweep';
 
 console.log('[StatusFlow Worker Engine] BullMQ & Redis Worker Daemon Booting...');
 console.log('[StatusFlow Worker] Listening on the status-posts queue.');
@@ -25,3 +26,11 @@ setInterval(() => {
 void sweepRecurringSeries().catch((err) => {
   console.error('[Worker] Recurring series sweep failed:', err.message);
 });
+
+// Orphaned-job safety net: see postSweep.ts. Runs more often than the billing sweep since a
+// stuck post is directly user-visible on the dashboard, unlike a lapsed subscription.
+setInterval(() => {
+  sweepStalledStatusPosts().catch((err) => {
+    console.error('[Worker] Post sweep failed:', err.message);
+  });
+}, 5 * 60 * 1000);
