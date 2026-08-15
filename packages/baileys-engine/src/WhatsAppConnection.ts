@@ -98,6 +98,13 @@ export class WhatsAppConnection extends EventEmitter {
         // improve on later, more-spaced-out attempts, but a step that consistently needs
         // more room than the default gives it.
         defaultQueryTimeoutMs: 120_000,
+        // Defaults to false. It's read only during device *registration* (see
+        // @whiskeysockets/baileys/lib/Utils/validate-connection.js's generateRegistrationNode,
+        // which sets the companion payload's requireFullSync from exactly this flag) — an
+        // ordinary reconnect to an already-registered device never touches it. Left at the
+        // default, a fresh pairing can end up with a lighter/partial initial sync instead of
+        // the account's real full contact list, and no later reconnect ever asks for more.
+        syncFullHistory: true,
       });
 
       // Baileys fires this listener without awaiting it — an unhandled rejection here
@@ -261,6 +268,16 @@ export class WhatsAppConnection extends EventEmitter {
     });
   }
 
+  /** Polls Redis for this session's synced contacts, up to `timeoutMs` — see sendStatus(). */
+  private async waitForContacts(timeoutMs = 45_000, pollIntervalMs = 3_000): Promise<string[]> {
+    const deadline = Date.now() + timeoutMs;
+    while (true) {
+      const contactJids = await getContactJids(this.sessionId, this.redis);
+      if (contactJids.length > 0 || Date.now() >= deadline) return contactJids;
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+  }
+
   /** Publishes a status update. Reuses the persisted session — no new pairing code needed if already connected before. */
   async sendStatus(input: SendStatusInput): Promise<void> {
     const opened = await this.waitUntilOpen();
@@ -276,7 +293,13 @@ export class WhatsAppConnection extends EventEmitter {
     // own — Baileys only encrypts it for the JIDs listed in `statusJidList`. Omitting it
     // doesn't error: sendMessage resolves normally, the post gets marked COMPLETED, and
     // the status is delivered to nobody. Failing loudly here beats a silent no-op.
-    const contactJids = await getContactJids(this.sessionId, this.redis);
+    //
+    // A short grace-period poll before giving up: this connection just reached 'open', and
+    // 'messaging-history.set' (see contactsStore.ts) can still be a few seconds away even
+    // with syncFullHistory on. Worth the wait here specifically — BullMQ's retry backoff
+    // already covers a much longer horizon, but there's no reason to burn a whole retry
+    // attempt (and its backoff delay) on a sync that was seconds from landing anyway.
+    const contactJids = await this.waitForContacts();
     if (contactJids.length === 0) {
       throw new Error(
         'No synced WhatsApp contacts yet, so this status would not be visible to anyone. ' +
