@@ -99,6 +99,18 @@ export class WhatsAppConnection extends EventEmitter {
         // improve on later, more-spaced-out attempts, but a step that consistently needs
         // more room than the default gives it.
         defaultQueryTimeoutMs: 120_000,
+        // Defaults to true. On 'open', Baileys fires off fetchProps/fetchBlocklist/
+        // fetchPrivacySettings to mirror what the real WhatsApp Web client requests for
+        // display purposes — this app never renders any of that, it only ever sends status
+        // broadcasts. fetchProps was observed hanging for the full defaultQueryTimeoutMs
+        // and logging "unexpected error in 'init queries'"; disabling this is a real, if
+        // minor, fix on its own (nothing here consumes their result, so there's no reason
+        // to pay that cost or risk that noise). NOTE: this did NOT resolve the deeper
+        // sendStatus() timeout also under investigation — that one reproduces even with
+        // this disabled, isolated from any other connection, so it's coming from somewhere
+        // else in the send path (likely prekey/session setup for the recipients in
+        // statusJidList) and needs separate investigation.
+        fireInitQueries: false,
         // Defaults to false. It's read only during device *registration* (see
         // @whiskeysockets/baileys/lib/Utils/validate-connection.js's generateRegistrationNode,
         // which sets the companion payload's requireFullSync from exactly this flag) — an
