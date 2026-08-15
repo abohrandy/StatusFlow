@@ -3,6 +3,7 @@ import { WhatsAppConnection } from '@statusflow/baileys-engine';
 import { redisConnection } from './redis';
 import {
   getStatusPostForWorker,
+  markSessionLoggedOut,
   markStatusPostCompleted,
   markStatusPostFailed,
   markStatusPostProcessing,
@@ -71,7 +72,14 @@ export class WorkerProcessor {
       } catch (err: any) {
         const message = err?.message ?? 'Unknown publish error.';
         await recordQueueLog(post.id, attemptNumber, `Attempt failed: ${message}`);
-        if (attemptNumber >= maxAttempts) {
+        if (connection.isLoggedOut()) {
+          // Not a transient failure — retrying just burns the remaining attempts against a
+          // session WhatsApp has already killed. Fail permanently now and reflect the real
+          // session state so later posts short-circuit on the CONNECTED check instead of
+          // repeating this same doomed connection attempt.
+          await markSessionLoggedOut(post.session_id!);
+          await markStatusPostFailed(post.id, message);
+        } else if (attemptNumber >= maxAttempts) {
           await markStatusPostFailed(post.id, message);
         } else {
           throw err; // let BullMQ retry with its configured backoff

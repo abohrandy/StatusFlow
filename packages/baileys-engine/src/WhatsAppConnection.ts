@@ -53,6 +53,7 @@ export class WhatsAppConnection extends EventEmitter {
   private status: ConnectionStatus = 'connecting';
   private qrReady = false;
   private closingIntentionally = false;
+  private loggedOut = false;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -146,6 +147,7 @@ export class WhatsAppConnection extends EventEmitter {
           // pairing could never complete, so only surface `close` as terminal when the
           // session was actually logged out or we closed it ourselves.
           if (loggedOut || this.closingIntentionally) {
+            if (loggedOut) this.loggedOut = true;
             this.status = 'close';
             this.emit('status', this.status);
             this.emit('close', { statusCode, loggedOut });
@@ -242,6 +244,12 @@ export class WhatsAppConnection extends EventEmitter {
     return this.status;
   }
 
+  /** True once WhatsApp's server has sent an explicit logout (not just a transient close) —
+   * the persisted session is dead and the account needs to go through pairing again. */
+  isLoggedOut(): boolean {
+    return this.loggedOut;
+  }
+
   /** Resolves true once the socket reaches 'open', false if it closes or times out first. */
   async waitUntilOpen(timeoutMs = 20_000): Promise<boolean> {
     await this.ensureSocket();
@@ -291,6 +299,9 @@ export class WhatsAppConnection extends EventEmitter {
     // the handshake even had a chance to finish.
     const opened = await this.waitUntilOpen(120_000);
     if (!opened) {
+      if (this.isLoggedOut()) {
+        throw new Error('WhatsApp session was logged out — reconnect WhatsApp to keep posting statuses.');
+      }
       throw new Error('WhatsApp connection did not open in time.');
     }
     // Fetch the socket after waiting, not before — a transient close/reconnect while

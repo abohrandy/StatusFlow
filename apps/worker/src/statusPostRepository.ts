@@ -44,6 +44,13 @@ export async function markStatusPostFailed(id: string, errorMessage: string): Pr
   ]);
 }
 
+/** WhatsApp itself reported this session logged out (see WhatsAppConnection.isLoggedOut) —
+ * the persisted creds are dead, so reflect that instead of leaving a stale CONNECTED row
+ * that keeps sending posts through a socket WhatsApp will only reject again. */
+export async function markSessionLoggedOut(sessionId: string): Promise<void> {
+  await pool.query(`UPDATE whatsapp_sessions SET status = 'DISCONNECTED' WHERE id = $1`, [sessionId]);
+}
+
 export async function recordQueueLog(postId: string, attemptNumber: number, message: string): Promise<void> {
   await pool.query(`INSERT INTO queue_logs (post_id, attempt_number, log_message) VALUES ($1, $2, $3)`, [
     postId,
