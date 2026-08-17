@@ -345,7 +345,12 @@ export class WhatsAppConnection extends EventEmitter {
     // NOT automatically include the sender's own other devices. Without this, the status
     // reaches your contacts but never syncs back to your own phone's "My Status" — which is
     // exactly what "completed with zero errors, but nothing shows up when I check" looks like.
-    const selfJid = sock.user?.id;
+    // Baileys 7 changed `sock.user.id` to prefer the newer @lid form over the traditional
+    // @s.whatsapp.net phone-number JID (see Contact.d.ts: "ID either in lid or jid format
+    // (preferred)") — self-sync back to "My Status" is the traditional mechanism this
+    // always relied on the PN JID for, so prefer `phoneNumber` and only fall back to `id`
+    // if a session somehow doesn't have it populated.
+    const selfJid = sock.user?.phoneNumber ?? sock.user?.id;
     const statusJidList = selfJid ? [...new Set([...contactJids, selfJid])] : contactJids;
     const sendOpts = { broadcast: true, statusJidList } as const;
 

@@ -3,6 +3,7 @@ import type { QueueLog, StatusPost } from '@statusflow/api-client';
 import { apiClient } from '../lib/apiClient';
 
 type HistoryStatus = 'COMPLETED' | 'FAILED' | 'CANCELLED';
+type HistoryMediaType = 'TEXT' | 'IMAGE' | 'VIDEO';
 
 function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -12,6 +13,9 @@ export const HistoryAndCalendar: React.FC = () => {
   const [tab, setTab] = useState<'HISTORY' | 'CALENDAR'>('CALENDAR');
   const [calendarMode, setCalendarMode] = useState<'MONTHLY' | 'WEEKLY' | 'DAILY'>('MONTHLY');
   const [statusFilter, setStatusFilter] = useState<'ALL' | HistoryStatus>('ALL');
+  const [mediaTypeFilter, setMediaTypeFilter] = useState<'ALL' | HistoryMediaType>('ALL');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLog, setSelectedLog] = useState<StatusPost | null>(null);
   const [postLogs, setPostLogs] = useState<QueueLog[] | null>(null);
@@ -41,11 +45,19 @@ export const HistoryAndCalendar: React.FC = () => {
       .finally(() => setPostLogsLoading(false));
   }, [selectedLog]);
 
-  const filteredHistory = history.filter(item => {
-    const matchesFilter = statusFilter === 'ALL' || item.status === statusFilter;
-    const matchesSearch = (item.caption ?? '').toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
+  const filteredHistory = history
+    .filter(item => {
+      const matchesStatus = statusFilter === 'ALL' || item.status === statusFilter;
+      const matchesMediaType = mediaTypeFilter === 'ALL' || item.mediaType === mediaTypeFilter;
+      const matchesSearch = (item.caption ?? '').toLowerCase().includes(searchQuery.toLowerCase());
+      const scheduledAt = new Date(item.scheduledAt).getTime();
+      const matchesFrom = !dateFrom || scheduledAt >= new Date(dateFrom).getTime();
+      // dateTo is a day picker with no time component — treat it as "through the end of that day".
+      const matchesTo = !dateTo || scheduledAt < new Date(dateTo).getTime() + 24 * 60 * 60 * 1000;
+      return matchesStatus && matchesMediaType && matchesSearch && matchesFrom && matchesTo;
+    })
+    // Most recently scheduled first, so a just-sent post shows at the top instead of the bottom.
+    .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime());
 
   // Calendar views plot every post (past and upcoming) by its real scheduledAt date.
   const allPosts = [...history, ...scheduled];
@@ -201,30 +213,79 @@ export const HistoryAndCalendar: React.FC = () => {
         /* History & Detailed Logs Table */
         <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-6">
           {/* Filters & Search Toolbar */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            {/* Filter Pills */}
-            <div className="flex gap-2 overflow-x-auto w-full sm:w-auto">
-              {(['ALL', 'COMPLETED', 'FAILED', 'CANCELLED'] as const).map(status => (
-                <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    statusFilter === status ? 'bg-emerald-500 text-zinc-950' : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
-                  }`}
-                >
-                  {status}
-                </button>
-              ))}
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* Status Filter Pills */}
+              <div className="flex gap-2 overflow-x-auto w-full sm:w-auto">
+                {(['ALL', 'COMPLETED', 'FAILED', 'CANCELLED'] as const).map(status => (
+                  <button
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                      statusFilter === status ? 'bg-emerald-500 text-zinc-950' : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search Input */}
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search history log captions..."
+                className="w-full sm:w-64 px-4 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+              />
             </div>
 
-            {/* Search Input */}
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search history log captions..."
-              className="w-full sm:w-64 px-4 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
-            />
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              {/* Media Type Filter Pills */}
+              <div className="flex gap-2 overflow-x-auto w-full sm:w-auto">
+                {(['ALL', 'TEXT', 'IMAGE', 'VIDEO'] as const).map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setMediaTypeFilter(type)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                      mediaTypeFilter === type ? 'bg-emerald-500 text-zinc-950' : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+
+              {/* Date Range Filter */}
+              <div className="flex items-center gap-2 text-xs text-zinc-400 w-full sm:w-auto">
+                <label className="flex items-center gap-1.5">
+                  From
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="px-2 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-emerald-500"
+                  />
+                </label>
+                <label className="flex items-center gap-1.5">
+                  To
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="px-2 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-emerald-500"
+                  />
+                </label>
+                {(dateFrom || dateTo) && (
+                  <button
+                    onClick={() => { setDateFrom(''); setDateTo(''); }}
+                    className="px-2 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* History Log List */}
