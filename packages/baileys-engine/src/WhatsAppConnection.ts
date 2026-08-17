@@ -28,7 +28,8 @@ async function getBaileysVersion(): Promise<[number, number, number]> {
   if (cachedVersion && Date.now() - cachedVersion.fetchedAt < VERSION_CACHE_TTL_MS) {
     return cachedVersion.version;
   }
-  const { version } = await fetchLatestBaileysVersion({ timeout: 5_000 });
+  // Baileys 7 dropped the `timeout` option in favor of a standard fetch AbortSignal.
+  const { version } = await fetchLatestBaileysVersion({ signal: AbortSignal.timeout(5_000) });
   cachedVersion = { version, fetchedAt: Date.now() };
   return version;
 }
